@@ -3,7 +3,8 @@ BINARY      := broccolini
 APP_TITLE	:= broccolini
 APP_AUTHOR 	:= vgmoose
 
-SOURCES		+=	. src
-CFLAGS		+= -DUSE_KEYBOARD
+SOURCES		+=	. src utils
+CFLAGS		+= -DUSE_KEYBOARD -DNETWORK
+LDFLAGS     += -lcurl
 
 include libs/chesto/Makefile

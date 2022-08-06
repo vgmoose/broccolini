@@ -1,3 +1,9 @@
 [submodule "libs/chesto"]
 	path = libs/chesto
-	url = git@github.com:vgmoose/chesto.git
+	url = https://github.com/vgmoose/chesto.git
+[submodule "libs/duktape"]
+	path = libs/duktape
+	url = https://github.com/svaarala/duktape.git
+[submodule "libs/litehtml"]
+	path = libs/litehtml
+	url = https://github.com/litehtml/litehtml.git
