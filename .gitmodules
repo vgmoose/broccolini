@@ -1,0 +1,3 @@
+[submodule "libs/chesto"]
+	path = libs/chesto
+	url = git@github.com:vgmoose/chesto.git
