@@ -1,4 +1,5 @@
 #include "../libs/chesto/src/Element.hpp"
+#include <litehtml.h>
 #include <unordered_map>
 #include <string>
 
@@ -8,8 +9,10 @@ public:
 	WebView();
     std::string url;
     std::string contents;
+    litehtml::document::ptr m_doc;
+
     void downloadPage();
 
     bool process(InputEvents* event);
-    // void render(Element* parent);
+    void render(Element* parent);
 };
