@@ -9,4 +9,5 @@ class MainDisplay : public RootDisplay
 public:
 	MainDisplay();
 	bool process(InputEvents* event);
+	int mainLoop();
 };

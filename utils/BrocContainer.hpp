@@ -1,9 +1,12 @@
 #include <litehtml.h>
+#include "../src/WebView.hpp"
 
 class BrocContainer : public litehtml::document_container
 {
 public:
-    BrocContainer();
+    BrocContainer(WebView* webView);
+    std::string base_url;
+    WebView* webView;
 
     // overridden from the litehtml::document_container interface
     virtual litehtml::uint_ptr	create_font(const litehtml::tchar_t* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) override;

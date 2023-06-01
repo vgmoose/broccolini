@@ -1,4 +1,6 @@
 #include "MainDisplay.hpp"
+#include "WebView.hpp"
+
 
 MainDisplay::MainDisplay()
 {
@@ -11,4 +13,14 @@ bool MainDisplay::process(InputEvents* event)
 	// keep processing child elements
     this->canUseSelectToExit = true;
 	return RootDisplay::process(event);
+}
+
+int MainDisplay::mainLoop()
+{
+	WebView* webview = new WebView();
+    this->child(webview);
+
+	int ret = RootDisplay::mainLoop();
+
+	return ret;
 }
