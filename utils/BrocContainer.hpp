@@ -8,10 +8,14 @@ public:
     std::string base_url;
     WebView* webView;
 
+    CST_Font* font = nullptr;
+    int eternalCounter = 0;
+
     // overridden from the litehtml::document_container interface
     virtual litehtml::uint_ptr	create_font(const litehtml::tchar_t* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) override;
     virtual void delete_font(litehtml::uint_ptr hFont) override;
     virtual int text_width(const litehtml::tchar_t* text, litehtml::uint_ptr hFont) override;
+    // virtual void draw_text(litehtml::uint_ptr hdc, const litehtml::tchar_t* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
     virtual void draw_text(litehtml::uint_ptr hdc, const litehtml::tchar_t* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
     virtual int pt_to_px(int pt) const override;
     virtual int get_default_font_size() const override;

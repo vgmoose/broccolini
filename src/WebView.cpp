@@ -10,7 +10,8 @@ WebView::WebView()
 {
     // download the target page
     this->url = "https://vgmoose.com";
-    // this->url = "http://127.0.0.1:8000";
+    // this->url = "https://en.wikipedia.org/wiki/Main_Page";
+    // this->url = "https://www.serebii.net";
     needsLoad = true;
 }
 
@@ -23,13 +24,18 @@ bool WebView::process(InputEvents *event)
     }
     // ((NetImageElement*)elements[0])->load();
     // keep processing child elements
-    return ListElement::process(event);
+    return ListElement::processUpDown(event) || ListElement::process(event);
 }
 
 void WebView::render(Element *parent)
 {
     // render the child elements
-    ListElement::render(this);
+    ListElement::render(parent);
+
+    if (container != nullptr) {
+        litehtml::position posObj = litehtml::position(0, 0, RootDisplay::screenWidth, RootDisplay::screenHeight);
+        this->m_doc->draw((litehtml::uint_ptr)container, this->x, this->y, &posObj);
+    }
 }
 
 void WebView::downloadPage()
@@ -40,13 +46,15 @@ void WebView::downloadPage()
     this->contents = "";
     downloadFileToMemory(this->url, &this->contents);
 
-    std::cout << "Contents: " << this->contents << std::endl;
+    // std::cout << "Contents: " << this->contents << std::endl;
 
     litehtml::context ctx;
     ctx.load_master_stylesheet(RAMFS "master.css");
 
-    BrocContainer *container = new BrocContainer(this);
+    container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());
 
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container, &ctx);
+    this->m_doc->render(RootDisplay::screenWidth);
+
 }

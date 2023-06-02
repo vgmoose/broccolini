@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <string>
 
+// TODO: no forward declare
+class BrocContainer;
+
 class WebView : public ListElement
 {
 public:
@@ -13,6 +16,8 @@ public:
     std::string url;
     std::string contents;
     litehtml::document::ptr m_doc;
+
+    BrocContainer* container = nullptr;
 
     void downloadPage();
 
