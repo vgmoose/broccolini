@@ -12,6 +12,8 @@ WebView::WebView()
     // this->url = "https://vgmoose.com";
     this->url = "https://en.wikipedia.org/wiki/Main_Page";
     // this->url = "https://www.serebii.net";
+    // this->url = "cute puppies";
+    // this->url = "https://maschell.github.io";
     needsLoad = true;
 }
 
@@ -29,13 +31,13 @@ bool WebView::process(InputEvents *event)
 
 void WebView::render(Element *parent)
 {
-    // render the child elements
-    ListElement::render(parent);
-
     if (container != nullptr) {
         litehtml::position posObj = litehtml::position(0, 0, RootDisplay::screenWidth, RootDisplay::screenHeight);
         this->m_doc->draw((litehtml::uint_ptr)container, this->x, this->y, &posObj);
     }
+
+    // render the child elements (above whatever we just drew)
+    ListElement::render(parent);
 }
 
 void WebView::downloadPage()

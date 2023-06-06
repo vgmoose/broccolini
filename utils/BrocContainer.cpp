@@ -11,39 +11,54 @@
 BrocContainer::BrocContainer(WebView* webView)
 {
     this->webView = webView;
-    this->font = CST_CreateFont();  
-
-    auto fontPath = RAMFS "./res/opensans.ttf";
-    auto renderer = (RootDisplay::mainDisplay)->renderer;
-    CST_LoadFont(font, renderer, fontPath, get_default_font_size(), CST_MakeColor(0,0,0,255), TTF_STYLE_NORMAL); 
-    
 }
 
 litehtml::uint_ptr BrocContainer::create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) {
     // std::cout << "Requested to create font: " << faceName << std::endl;
     fm->ascent = 0;
     fm->descent = 0;
-    fm->height = get_default_font_size();
-    fm->x_height = get_default_font_size();
 
-    return 1;
+    // auto fontKey = std::string(faceName) + "_" + std::to_string(size);
+
+    auto font = CST_CreateFont();  
+
+    // TODO: handle system fonts based on platform (and include a few defaults here)
+    auto fontPath = RAMFS "./res/opensans.ttf";
+    auto renderer = (RootDisplay::mainDisplay)->renderer;
+    CST_LoadFont(font, renderer, fontPath, size, CST_MakeColor(0,0,0,255), TTF_STYLE_NORMAL);
+
+    fm->height = size;
+    fm->x_height = CST_GetFontWidth(font, "x");
+
+    // save this font to the cache
+    auto fontKey = ++eternalCounter;
+    this->fontCache[fontKey] = font;
+
+    // return an ID for this font's key
+    return fontKey;
 }
 
 void BrocContainer::delete_font(litehtml::uint_ptr hFont) {
-    std::cout << "Deleting font: " << hFont << std::endl;
+    this->fontCache.erase(hFont);
 }
 
 int BrocContainer::text_width(const char* text, litehtml::uint_ptr hFont) {
-    // printf("Some text: %s\n", text);
+    auto font = this->fontCache[hFont];
     return  CST_GetFontWidth(font, text);
 }
 
 void BrocContainer::draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) {
-    // std::cout << "Requested to render text: [" << text << "]" << std::endl;
     auto renderer = RootDisplay::mainDisplay->renderer;
-    auto size = get_default_font_size();
-    CST_DrawFont(this->font, renderer, pos.left(), pos.bottom(), text);
-    // eternalCounter += size;
+    auto font = this->fontCache[hFont];
+
+    if (color.red != 0 || color.green != 0 || color.blue != 0) {
+        // color font! create an effect and use that to draw
+        auto align = FC_ALIGN_LEFT;
+        auto effect = FC_MakeEffect(align, FC_MakeScale(1, 1), CST_MakeColor(color.red, color.green, color.blue, color.alpha));
+        FC_DrawEffect(font, renderer, pos.left(), pos.top(), effect, text);
+    } else {
+        CST_DrawFont(font, renderer, pos.left(), pos.top(), text);
+    }
 }
 
 int BrocContainer::pt_to_px(int pt) const {
@@ -67,6 +82,8 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
     std::stringstream ss;
     std::string url;
 
+    printf("Going to resolve url: %s\n", src);
+
     if (baseurl == 0) {
         if (strlen(src) > 0 && src[0] == '/') {
             if (strlen(src) > 1 && src[1] == '/') {
@@ -76,7 +93,6 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
                 // this is a starting single "/" url, just take the domain
                 ss << this->base_domain << src;
             }
-
         } else {
             // this is a relative url, take the base url
             ss << this->base_url << "/" << src;
@@ -84,6 +100,8 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
 
         url = ss.str();
     }
+    printf("Resolved url: %s\n", url.c_str());
+
     return url;
 }
 
@@ -91,18 +109,22 @@ void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw
 
     std::string newUrl = resolve_url(src, baseurl);
     
-    // create an ImageElement
     std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;
     NetImageElement* img = new NetImageElement(
         newUrl.c_str(),
         []() {
             // could not load image, fallback
-            return new ImageElement(RAMFS "res/redx.png");
+            auto fallback = new ImageElement(RAMFS "res/redx.png");
+            fallback->setScaleMode(SCALE_PROPORTIONAL_WITH_BG);
+            return fallback;
         }
     );
-    // ImageElement* img = new ImageElement(RAMFS "res/redx.png");
 
-    img->position(10, 10);
+    // save this image to the map cache to be positioned later
+    printf("Saving image to cache: %s\n", src);
+    this->imageCache[src] = img;
+
+    img->position(10, 10); // draw off screen at first, will be positioned later (but we start loading asap)
     img->updateSizeAfterLoad = true;
     webView->child(img);
 }
@@ -114,9 +136,37 @@ void BrocContainer::get_image_size(const char* src, const char* baseurl, litehtm
 void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<litehtml::background_paint>& bgvec ) {
     printf("Requested to draw background\n");
     auto renderer = RootDisplay::mainDisplay->renderer;
-    
-    // const char* skirmie = bg.image.c_str();
-    // printf("Requesting image from %s, at %d, %d\n", skirmie, bg.clip_box.x, bg.clip_box.y);
+
+    for (auto bg : bgvec) {
+        CST_Rect dimens = {
+            bg.clip_box.x,
+            bg.clip_box.y,
+            bg.clip_box.width,
+            bg.clip_box.height
+        };
+
+        printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+        printf("Name of image: %s\n", bg.image.c_str());
+
+        // position the image according to the background position
+        if (bg.image.length() > 0) {
+            auto img = this->imageCache[bg.image];
+            if (img != nullptr) {
+                // if the image contains "Carl", print hi
+                if (bg.image.find("Carl") != std::string::npos) {
+                    printf("Hi Carl!\n");
+                }
+                printf("Positioning image: %s, postion %d, %d\n", bg.image.c_str(), bg.position_x, bg.position_y);
+                img->setPosition(webView->x + bg.position_x, -1*webView->y + bg.position_y);
+                img->setSize(dimens.w, dimens.h);
+            }
+        } else {
+            // no image, draw a filled rectangle
+            CST_SetDrawColorRGBA(renderer, bg.color.red, bg.color.green, bg.color.blue, 255);
+            CST_FillRect(renderer, &dimens);
+        }
+    }
+
 }
 
 void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders& borders, const litehtml::position& draw_pos, bool root) {
@@ -128,10 +178,13 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
         draw_pos.bottom() - draw_pos.top()
     };
 
-    printf("Border drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+    // printf("Border drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+
+    // TODO: get other border colors, for now grab the top one
+    auto color = borders.top.color;
 
     auto renderer = RootDisplay::mainDisplay->renderer;
-    CST_SetDrawColorRGBA(renderer, 0, 0, 0, 255);
+    CST_SetDrawColorRGBA(renderer, color.red, color.green, color.blue, color.alpha);
     CST_DrawRect(renderer, &dimens);
 }
 
@@ -144,14 +197,38 @@ void BrocContainer::set_base_url(const char* base_url ) {
     // std::cout << "Setting base url to: " << base_url << std::endl;
     std::string url = base_url;
 
-    // extract base url from full URL    
-    this->base_url = url.substr(0, url.find_last_of("/"));
+    // if the base url doesn't have a protocol, add it with HTTP
+    auto protoPos = url.find("://");
+    if (protoPos == std::string::npos) {
+        // no domain, let's see if we it's likely to be a search query (no dots)
+        if (url.find(".") == std::string::npos) {
+            // no dots, let's assume it's a search query
+            url = "https://google.com/search?q=" + url;
+        } else {
+            // no protocol, let's assume it's HTTP
+            url = "http://" + url;
+        }
+    }
+
+    protoPos = url.find("://") + 3;
+
+    // extract base url from full URL
+    auto endPos = url.find_last_of("/");
+    this->base_url = url.substr(protoPos, endPos);
+    if (endPos < protoPos) {
+        // just use the URL as is, with a trailing slash
+        this->base_url = url;
+    }
 
     // extract base domain from full URL
     url += "/";
     std::string protocol = url.substr(0, url.find("://"));
     std::string domain = url.substr(url.find("://") + 3);
-    domain = domain.substr(0, domain.find("/"));
+
+    auto endingSlashPos = domain.find("/");
+    if (endingSlashPos != std::string::npos) {
+        domain = domain.substr(0, endingSlashPos);
+    }
     this->base_domain = protocol + "://" + domain;
 
     this->protocol = protocol;
@@ -177,7 +254,7 @@ void BrocContainer::transform_text(litehtml::string& text, litehtml::text_transf
 
 void BrocContainer::import_css(litehtml::string& text, const litehtml::string& url, litehtml::string& baseurl ) {
     // std::cout << "Importing CSS: " << text << ", " << url << std::endl;
-    std::string newUrl = resolve_url(url.c_str(), baseurl.c_str());
+    std::string newUrl = resolve_url(url.c_str(), baseurl == "" ? nullptr : baseurl.c_str());
 
     /// download the CSS file
     std::string contents;
@@ -185,11 +262,11 @@ void BrocContainer::import_css(litehtml::string& text, const litehtml::string& u
 }
 
 void BrocContainer::set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius) {
-    printf("Setting clip\n");
+    printf("Call to set_clip\n");
 }
 
 void BrocContainer::del_clip( ) {
-    printf("Deleting clip\n");
+    printf("Call from del_clip\n");
 }
 
 void BrocContainer::get_client_rect(litehtml::position& client ) const {

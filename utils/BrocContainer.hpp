@@ -1,4 +1,5 @@
 #include <litehtml.h>
+#include "../libs/chesto/src/NetImageElement.hpp"
 #include "../src/WebView.hpp"
 
 class BrocContainer : public litehtml::document_container
@@ -10,13 +11,18 @@ public:
     std::string protocol; // eg. https
     WebView* webView;
 
-    CST_Font* font = nullptr;
-    int eternalCounter = 0;
+    int eternalCounter = 0; // used for some incremental ids
+
+    // create a map to store all fonts on the page
+    std::map<litehtml::uint_ptr, FC_Font*> fontCache;
+
+    // create a map to store all images on the page
+    std::map<std::string, NetImageElement*> imageCache;
 
     std::string resolve_url(const char* src, const char* baseurl);
 
     // overridden from the litehtml::document_container interface
-    virtual litehtml::uint_ptr	create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) override;
+    virtual litehtml::uint_ptr create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) override;
     virtual void delete_font(litehtml::uint_ptr hFont) override;
     virtual int text_width(const char* text, litehtml::uint_ptr hFont) override;
     // virtual void draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
