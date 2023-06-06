@@ -44,7 +44,6 @@
 
 
 int (*networking_callback)(void*, double, double, double, double);
-int (*libget_status_callback)(int, int, int);
 
 // reference to the curl handle so that we can re-use the connection
 #ifndef NETWORK_MOCK
@@ -158,6 +157,11 @@ bool downloadFileCommon(std::string path, std::string* buffer = NULL, ntwrk_stru
 	curl_easy_setopt(curl, CURLOPT_URL, path.c_str());
 	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, networking_callback);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
+
+	// set user agent
+	const char* userAgent = "Mozilla/5.0 (Generic; Chesto) litehtml/0.8 (KHTML, like Gecko) Broccolini/0.0";
+
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent);
 
 	bool skipDisk = data_struct == NULL;
 

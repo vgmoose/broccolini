@@ -1,6 +1,8 @@
 #include "BrocContainer.hpp"
 #include "NetImageElement.hpp"
 #include "ImageElement.hpp"
+#include "Utils.hpp"
+#include <sstream>
 #include <iostream>
 
 // This class implements the litehtml::document_container interface.
@@ -11,13 +13,13 @@ BrocContainer::BrocContainer(WebView* webView)
     this->webView = webView;
     this->font = CST_CreateFont();  
 
-    auto fontPath = RAMFS "./res/mono.ttf";
+    auto fontPath = RAMFS "./res/opensans.ttf";
     auto renderer = (RootDisplay::mainDisplay)->renderer;
     CST_LoadFont(font, renderer, fontPath, get_default_font_size(), CST_MakeColor(0,0,0,255), TTF_STYLE_NORMAL); 
     
 }
 
-litehtml::uint_ptr BrocContainer::create_font(const litehtml::tchar_t* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) {
+litehtml::uint_ptr BrocContainer::create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) {
     // std::cout << "Requested to create font: " << faceName << std::endl;
     fm->ascent = 0;
     fm->descent = 0;
@@ -31,12 +33,12 @@ void BrocContainer::delete_font(litehtml::uint_ptr hFont) {
     std::cout << "Deleting font: " << hFont << std::endl;
 }
 
-int BrocContainer::text_width(const litehtml::tchar_t* text, litehtml::uint_ptr hFont) {
+int BrocContainer::text_width(const char* text, litehtml::uint_ptr hFont) {
     // printf("Some text: %s\n", text);
-    return get_default_font_size();
+    return  CST_GetFontWidth(font, text);
 }
 
-void BrocContainer::draw_text(litehtml::uint_ptr hdc, const litehtml::tchar_t* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) {
+void BrocContainer::draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) {
     // std::cout << "Requested to render text: [" << text << "]" << std::endl;
     auto renderer = RootDisplay::mainDisplay->renderer;
     auto size = get_default_font_size();
@@ -52,29 +54,47 @@ int BrocContainer::get_default_font_size() const {
     return 20;
 }
 
-const litehtml::tchar_t* BrocContainer::get_default_font_name() const {
+const char* BrocContainer::get_default_font_name() const {
     return "sans-serif";
 }
 
 void BrocContainer::draw_list_marker(litehtml::uint_ptr hdc, const litehtml::list_marker& marker) {
-
+    // printf("Requested to render list marker\n");
 }
 
-void BrocContainer::load_image(const litehtml::tchar_t* src, const litehtml::tchar_t* baseurl, bool redraw_on_ready) {
+// convert the url component according to URI rules
+std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
     std::stringstream ss;
     std::string url;
 
     if (baseurl == 0) {
-        ss << this->base_url << "/" << src;
-        baseurl = this->base_url.c_str();
+        if (strlen(src) > 0 && src[0] == '/') {
+            if (strlen(src) > 1 && src[1] == '/') {
+                // this is a starting double "//" url, just take the protocol
+                ss << this->protocol << ":" << src;
+            } else {
+                // this is a starting single "/" url, just take the domain
+                ss << this->base_domain << src;
+            }
+
+        } else {
+            // this is a relative url, take the base url
+            ss << this->base_url << "/" << src;
+        }
+
         url = ss.str();
-        src = url.c_str();
     }
+    return url;
+}
+
+void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw_on_ready) {
+
+    std::string newUrl = resolve_url(src, baseurl);
     
     // create an ImageElement
-    std::cout << "Requested to render Image [" << src << "]" << std::endl;
+    std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;
     NetImageElement* img = new NetImageElement(
-        src,
+        newUrl.c_str(),
         []() {
             // could not load image, fallback
             return new ImageElement(RAMFS "res/redx.png");
@@ -87,12 +107,16 @@ void BrocContainer::load_image(const litehtml::tchar_t* src, const litehtml::tch
     webView->child(img);
 }
 
-void BrocContainer::get_image_size(const litehtml::tchar_t* src, const litehtml::tchar_t* baseurl, litehtml::size& sz) {
+void BrocContainer::get_image_size(const char* src, const char* baseurl, litehtml::size& sz) {
     printf("Requested image size for: %s\n", src);
 }
 
-void BrocContainer::draw_background(litehtml::uint_ptr hdc, const litehtml::background_paint& bg) {
+void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<litehtml::background_paint>& bgvec ) {
     printf("Requested to draw background\n");
+    auto renderer = RootDisplay::mainDisplay->renderer;
+    
+    // const char* skirmie = bg.image.c_str();
+    // printf("Requesting image from %s, at %d, %d\n", skirmie, bg.clip_box.x, bg.clip_box.y);
 }
 
 void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders& borders, const litehtml::position& draw_pos, bool root) {
@@ -104,21 +128,33 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
         draw_pos.bottom() - draw_pos.top()
     };
 
-    // printf("Border drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+    printf("Border drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
 
     auto renderer = RootDisplay::mainDisplay->renderer;
     CST_SetDrawColorRGBA(renderer, 0, 0, 0, 255);
     CST_DrawRect(renderer, &dimens);
 }
 
-void BrocContainer::set_caption(const litehtml::tchar_t* caption ) {
+void BrocContainer::set_caption(const char* caption ) {
     // std::cout << "Setting caption to: " << caption << std::endl;
     CST_SetWindowTitle(caption);
 }
 
-void BrocContainer::set_base_url(const litehtml::tchar_t* base_url ) {
+void BrocContainer::set_base_url(const char* base_url ) {
     // std::cout << "Setting base url to: " << base_url << std::endl;
-    this->base_url = base_url;
+    std::string url = base_url;
+
+    // extract base url from full URL    
+    this->base_url = url.substr(0, url.find_last_of("/"));
+
+    // extract base domain from full URL
+    url += "/";
+    std::string protocol = url.substr(0, url.find("://"));
+    std::string domain = url.substr(url.find("://") + 3);
+    domain = domain.substr(0, domain.find("/"));
+    this->base_domain = protocol + "://" + domain;
+
+    this->protocol = protocol;
 }
 
 void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const litehtml::element::ptr& el ) {
@@ -127,23 +163,28 @@ void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const l
     std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
 }
 
-void BrocContainer::on_anchor_click(const litehtml::tchar_t* url, const litehtml::element::ptr& el ) {
+void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el ) {
     std::cout << "Anchor clicked: " << url << std::endl;
 }
 
-void BrocContainer::set_cursor(const litehtml::tchar_t* cursor ) {
+void BrocContainer::set_cursor(const char* cursor ) {
     std::cout << "Setting cursor to: " << cursor << std::endl;
 }
 
-void BrocContainer::transform_text(litehtml::tstring& text, litehtml::text_transform tt ) {
+void BrocContainer::transform_text(litehtml::string& text, litehtml::text_transform tt ) {
     std::cout << "Transforming text: " << text << std::endl;
 }
 
-void BrocContainer::import_css(litehtml::tstring& text, const litehtml::tstring& url, litehtml::tstring& baseurl ) {
-    std::cout << "Importing CSS: " << text << ", " << url << std::endl;
+void BrocContainer::import_css(litehtml::string& text, const litehtml::string& url, litehtml::string& baseurl ) {
+    // std::cout << "Importing CSS: " << text << ", " << url << std::endl;
+    std::string newUrl = resolve_url(url.c_str(), baseurl.c_str());
+
+    /// download the CSS file
+    std::string contents;
+    downloadFileToMemory(newUrl.c_str(), &text);
 }
 
-void BrocContainer::set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius, bool valid_x, bool valid_y ) {
+void BrocContainer::set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius) {
     printf("Setting clip\n");
 }
 
@@ -158,7 +199,7 @@ void BrocContainer::get_client_rect(litehtml::position& client ) const {
     client.height = RootDisplay::screenHeight;
 }
 
-std::shared_ptr<litehtml::element> BrocContainer::create_element(const litehtml::tchar_t *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
+std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
     // std::cout << "Requested to create an element: " << tag_name << std::endl;
 
     // // print out each attribute
@@ -185,6 +226,6 @@ void BrocContainer::get_media_features(litehtml::media_features& media ) const {
     media.resolution = 96;
 }
 
-void BrocContainer::get_language(litehtml::tstring& language, litehtml::tstring & culture ) const {
+void BrocContainer::get_language(litehtml::string& language, litehtml::string & culture ) const {
     printf("Getting language\n");
 }

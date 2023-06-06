@@ -5,7 +5,8 @@
 MainDisplay::MainDisplay()
 {
 	RootDisplay::super();
-    backgroundColor = fromRGB(0x3c, 0xb0, 0x43);
+    // backgroundColor = fromRGB(0x3c, 0xb0, 0x43);
+	backgroundColor = fromRGB(0xff, 0xff, 0xff);
 }
 
 bool MainDisplay::process(InputEvents* event)

@@ -9,8 +9,8 @@
 WebView::WebView()
 {
     // download the target page
-    this->url = "https://vgmoose.com";
-    // this->url = "https://en.wikipedia.org/wiki/Main_Page";
+    // this->url = "https://vgmoose.com";
+    this->url = "https://en.wikipedia.org/wiki/Main_Page";
     // this->url = "https://www.serebii.net";
     needsLoad = true;
 }
@@ -48,13 +48,13 @@ void WebView::downloadPage()
 
     // std::cout << "Contents: " << this->contents << std::endl;
 
-    litehtml::context ctx;
-    ctx.load_master_stylesheet(RAMFS "master.css");
+    // litehtml::context ctx;
+    // ctx.load_master_stylesheet(RAMFS "master.css");
 
     container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());
 
-    this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container, &ctx);
+    this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
     this->m_doc->render(RootDisplay::screenWidth);
 
 }

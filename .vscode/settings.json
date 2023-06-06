@@ -69,7 +69,9 @@
         "vector": "cpp",
         "algorithm": "cpp",
         "charconv": "cpp",
-        "__verbose_abort": "cpp"
+        "__verbose_abort": "cpp",
+        "set": "cpp",
+        "filesystem": "cpp"
     },
     "C_Cpp.default.configurationProvider": "ms-vscode.makefile-tools"
 }
