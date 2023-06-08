@@ -1,6 +1,7 @@
 #include "BrocContainer.hpp"
 #include "NetImageElement.hpp"
 #include "ImageElement.hpp"
+#include "../src/Base64Image.hpp"
 #include "Utils.hpp"
 #include <sstream>
 #include <iostream>
@@ -23,12 +24,62 @@ litehtml::uint_ptr BrocContainer::create_font(const char* faceName, int size, in
     auto font = CST_CreateFont();  
 
     // TODO: handle system fonts based on platform (and include a few defaults here)
-    auto fontPath = RAMFS "./res/opensans.ttf";
-    auto renderer = (RootDisplay::mainDisplay)->renderer;
-    CST_LoadFont(font, renderer, fontPath, size, CST_MakeColor(0,0,0,255), TTF_STYLE_NORMAL);
+    // if we have a comma or spaces, grab the right-most one
+    litehtml::string_vector fonts;
+	litehtml::split_string(faceName, fonts, ",");
+    auto lastFont = fonts[fonts.size() - 1];
+	litehtml::trim(lastFont);
 
-    fm->height = size;
+    std::string fontFamily = lastFont;
+
+    auto fontPath = std::string(RAMFS "./res/fonts/");
+
+    if (fontFamily == "serif") {
+        fontPath += "PTSerif";
+    } else if (fontFamily == "monospace") {
+        fontPath += "UbuntuMono";
+    } else if (fontFamily == "cursive") {
+        fontPath += "CedarvilleCursive";
+    } else if (fontFamily == "fantasy") {
+        fontPath += "IndieFlower";
+    } else { // sans-serif and catch-all
+        fontPath += "OpenSans";
+    }
+
+    fontPath += "-";
+
+    // determine bold/italics/both
+    std::string fontSlug = "";
+    int ttfStyles = 0;
+
+    if (fontFamily != "cursive" && fontFamily != "fantasy") {
+        if (weight >= 600) {
+            fontSlug += "Bold";
+            ttfStyles |= TTF_STYLE_BOLD;
+        }
+        if (italic == litehtml::font_style_italic) {
+            fontSlug += "Italic";
+            ttfStyles |= TTF_STYLE_ITALIC;
+        }
+    }
+
+    if (fontSlug == "") {
+        fontSlug = "Regular";
+        ttfStyles = TTF_STYLE_NORMAL;
+    }
+
+    fontPath += fontSlug + ".ttf";
+
+    std::cout << "Loading font: " << fontPath << std::endl;
+
+    auto renderer = (RootDisplay::mainDisplay)->renderer;
+    CST_LoadFont(font, renderer, fontPath.c_str(), size, CST_MakeColor(0,0,0,255), ttfStyles);
+
+    // save some info about the font
     fm->x_height = CST_GetFontWidth(font, "x");
+    fm->ascent = FC_GetAscent(font, "x");
+    fm->descent = FC_GetDescent(font, "x");
+    fm->height = FC_GetHeight(font, "x");
 
     // save this font to the cache
     auto fontKey = ++eternalCounter;
@@ -84,7 +135,7 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
 
     printf("Going to resolve url: %s\n", src);
 
-    if (baseurl == 0) {
+    if (baseurl == 0 || *baseurl == '\0') {
         if (strlen(src) > 0 && src[0] == '/') {
             if (strlen(src) > 1 && src[1] == '/') {
                 // this is a starting double "//" url, just take the protocol
@@ -108,33 +159,59 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
 void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw_on_ready) {
 
     std::string newUrl = resolve_url(src, baseurl);
+    Texture* img = nullptr;
     
-    std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;
-    NetImageElement* img = new NetImageElement(
-        newUrl.c_str(),
-        []() {
-            // could not load image, fallback
-            auto fallback = new ImageElement(RAMFS "res/redx.png");
-            fallback->setScaleMode(SCALE_PROPORTIONAL_WITH_BG);
-            return fallback;
+    std::string srcString = src;
+
+    // if it starts with "data:", it's a data url, so we can just load it directly
+    if (srcString.substr(0, 5) == "data:") {
+        // TODO: re-use this datauri logic, for other non-image mimetypes
+        auto isBase64 = srcString.find(";base64") != std::string::npos;
+        auto data = srcString.substr(srcString.find(",") + 1);
+
+        if (!isBase64) {
+            return; // unsupported (what would this mean?)
         }
-    );
+
+        // decode the base64 and load the iamge
+        img = new Base64Image(data);
+
+    } else {
+        // normal url, load it from the network
+        // std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;
+        auto urlCopy = new std::string(newUrl.c_str());
+        img = new NetImageElement(
+            urlCopy->c_str(),
+            []() {
+                // could not load image, fallback
+                auto fallback = new ImageElement(RAMFS "res/redx.png");
+                fallback->setScaleMode(SCALE_PROPORTIONAL_WITH_BG);
+                return fallback;
+            }
+        );
+        ((NetImageElement*)img)->updateSizeAfterLoad = true;
+    }
 
     // save this image to the map cache to be positioned later
     printf("Saving image to cache: %s\n", src);
     this->imageCache[src] = img;
 
-    img->position(10, 10); // draw off screen at first, will be positioned later (but we start loading asap)
-    img->updateSizeAfterLoad = true;
+    img->position(-1000, -1000); // draw off screen at first, will be positioned later (but we start loading asap)
     webView->child(img);
 }
 
 void BrocContainer::get_image_size(const char* src, const char* baseurl, litehtml::size& sz) {
-    printf("Requested image size for: %s\n", src);
+    // look up in cache
+    auto img = this->imageCache[src];
+
+    if (img != nullptr) {
+        sz.width = img->width;
+        sz.height = img->height;
+    }
 }
 
 void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<litehtml::background_paint>& bgvec ) {
-    printf("Requested to draw background\n");
+    // printf("Requested to draw background\n");
     auto renderer = RootDisplay::mainDisplay->renderer;
 
     for (auto bg : bgvec) {
@@ -145,20 +222,22 @@ void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<l
             bg.clip_box.height
         };
 
-        printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
-        printf("Name of image: %s\n", bg.image.c_str());
+        // printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+        // printf("Name of image: %s\n", bg.image.c_str());
 
         // position the image according to the background position
         if (bg.image.length() > 0) {
             auto img = this->imageCache[bg.image];
             if (img != nullptr) {
-                // if the image contains "Carl", print hi
-                if (bg.image.find("Carl") != std::string::npos) {
-                    printf("Hi Carl!\n");
-                }
-                printf("Positioning image: %s, postion %d, %d\n", bg.image.c_str(), bg.position_x, bg.position_y);
+                // printf("Positioning image: %s, postion %d, %d\n", bg.image.c_str(), bg.position_x, bg.position_y);
                 img->setPosition(webView->x + bg.position_x, -1*webView->y + bg.position_y);
                 img->setSize(dimens.w, dimens.h);
+
+                // if it's not a background attachment, move it to the front
+                // if (bg.attachment ) {
+                    // printf("Moving image named %s to front, background_attachment=%d\n", bg.image.c_str(), bg.attachment);
+                    // img->moveToFront();
+                // }
             }
         } else {
             // no image, draw a filled rectangle
@@ -197,24 +276,12 @@ void BrocContainer::set_base_url(const char* base_url ) {
     // std::cout << "Setting base url to: " << base_url << std::endl;
     std::string url = base_url;
 
-    // if the base url doesn't have a protocol, add it with HTTP
-    auto protoPos = url.find("://");
-    if (protoPos == std::string::npos) {
-        // no domain, let's see if we it's likely to be a search query (no dots)
-        if (url.find(".") == std::string::npos) {
-            // no dots, let's assume it's a search query
-            url = "https://google.com/search?q=" + url;
-        } else {
-            // no protocol, let's assume it's HTTP
-            url = "http://" + url;
-        }
-    }
-
-    protoPos = url.find("://") + 3;
+    // we assume we have a proper protocol set
+    auto protoPos = url.find("://") + 3;
 
     // extract base url from full URL
     auto endPos = url.find_last_of("/");
-    this->base_url = url.substr(protoPos, endPos);
+    this->base_url = url.substr(0, protoPos) + url.substr(protoPos, endPos);
     if (endPos < protoPos) {
         // just use the URL as is, with a trailing slash
         this->base_url = url;
@@ -253,20 +320,21 @@ void BrocContainer::transform_text(litehtml::string& text, litehtml::text_transf
 }
 
 void BrocContainer::import_css(litehtml::string& text, const litehtml::string& url, litehtml::string& baseurl ) {
-    // std::cout << "Importing CSS: " << text << ", " << url << std::endl;
-    std::string newUrl = resolve_url(url.c_str(), baseurl == "" ? nullptr : baseurl.c_str());
-
+    std::cout << "Importing CSS: " << text << ", " << url << std::endl;
+    std::string newUrl = resolve_url(url.c_str(), baseurl.c_str());
+    std::cout << "Resolved URL: " << newUrl << std::endl;
     /// download the CSS file
+    // TODO: do this asynchronously and re-update the page when it's done
     std::string contents;
     downloadFileToMemory(newUrl.c_str(), &text);
 }
 
 void BrocContainer::set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius) {
-    printf("Call to set_clip\n");
+    // printf("Call to set_clip\n");
 }
 
 void BrocContainer::del_clip( ) {
-    printf("Call from del_clip\n");
+    // printf("Call from del_clip\n");
 }
 
 void BrocContainer::get_client_rect(litehtml::position& client ) const {

@@ -17,7 +17,7 @@ public:
     std::map<litehtml::uint_ptr, FC_Font*> fontCache;
 
     // create a map to store all images on the page
-    std::map<std::string, NetImageElement*> imageCache;
+    std::map<std::string, Texture*> imageCache;
 
     std::string resolve_url(const char* src, const char* baseurl);
 

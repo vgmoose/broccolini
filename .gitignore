@@ -1,4 +1,4 @@
 *.o
 *.bin
-.vscode
+.vscode/*
 *.DS_Store

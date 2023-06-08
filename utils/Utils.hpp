@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <string>
+#include <map>
 
 // the struct to be passed in the write function.
 typedef struct
@@ -27,7 +28,7 @@ bool CreateSubfolder(char* cstringpath);
 
 // networking stuff
 int init_networking();
-bool downloadFileToMemory(std::string path, std::string* buffer); // writes to disk in BUF_SIZE chunks.
+bool downloadFileToMemory(std::string path, std::string* buffer, int* httpCode = NULL, std::map<std::string, std::string>* headerResp = NULL); // writes to disk in BUF_SIZE chunks.
 bool downloadFileToDisk(std::string remote_path, std::string local_path); // saves file to local_path.
 
 #ifndef NETWORK_MOCK
@@ -47,3 +48,4 @@ int remove_empty_dirs(const char* name, int count);
 
 const std::string dir_name(std::string file_path);
 bool compareLen(const std::string& a, const std::string& b);
+std::string base64_decode(const std::string_view encoded_string);

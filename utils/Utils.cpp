@@ -37,6 +37,10 @@
 #include <unistd.h>
 #include <ctime>
 
+#include <map>
+#include <algorithm>
+#include <cstring>
+
 #include "Utils.hpp"
 
 
@@ -142,9 +146,40 @@ static size_t DiskWriteCallback(void* contents, size_t size, size_t num_files, v
     return realsize;
 }
 
+// record the headers into a map
+size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata) {
+	std::map<std::string, std::string>* headerResp = (std::map<std::string, std::string>*)userdata;
+
+	std::string header(buffer);
+	std::string::size_type pos = header.find(':');
+	if (std::string::npos == pos) {
+		// Malformed header?
+		return nitems * size;
+	}
+	
+	std::string name = header.substr(0, pos);
+	std::string value = header.substr(pos + 1);
+
+	// Remove whitespace
+	value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](int ch) {
+		return !std::isspace(ch);
+	}));
+	// https://stackoverflow.com/a/313990/4953343
+	std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
+	(*headerResp)[name] = value;
+
+	return nitems * size;
+}
+
 // https://gist.github.com/alghanmi/c5d7b761b2c9ab199157
 // if data_struct is specified, file will go straight to disk as it downloads
-bool downloadFileCommon(std::string path, std::string* buffer = NULL, ntwrk_struct_t* data_struct = NULL)
+bool downloadFileCommon(
+	std::string path,
+	std::string* buffer = NULL,
+	ntwrk_struct_t* data_struct = NULL,
+	int* http_code = NULL,
+	std::map<std::string, std::string>* headerResp = NULL
+)
 {
 #ifndef NETWORK_MOCK
 	CURLcode res;
@@ -167,20 +202,39 @@ bool downloadFileCommon(std::string path, std::string* buffer = NULL, ntwrk_stru
 
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, skipDisk ? MemoryWriteCallback : DiskWriteCallback);
 
+	// get header info as map
+	curl_slist* curlHeaders = NULL;
+	if (headerResp != NULL) {
+		// iterate through each header from the curl resp
+		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
+		curl_easy_setopt(curl, CURLOPT_HEADERDATA, headerResp);
+	}
+
 	if (skipDisk)
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, buffer);
 	else
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, data_struct);
 
-	return curl_easy_perform(curl) == CURLE_OK;
+	bool ret = curl_easy_perform(curl) == CURLE_OK;
+	// get status code info
+	if (http_code != NULL) {
+		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
+	}
+
+	return ret;
 #else
   return true;
 #endif
 }
 
-bool downloadFileToMemory(std::string path, std::string* buffer)
+bool downloadFileToMemory(
+	std::string path,
+	std::string* buffer,
+	int* httpCode,
+	std::map<std::string, std::string>* headerResp
+)
 {
-	return downloadFileCommon(path, buffer, NULL);
+	return downloadFileCommon(path, buffer, NULL, httpCode, headerResp);
 }
 
 bool downloadFileToDisk(std::string remote_path, std::string local_path)
@@ -362,4 +416,33 @@ int remove_empty_dirs(const char* name, int count)
 
 	// return number of files at this level (total count minus starting)
 	return count - starting_count;
+}
+
+// https://stackoverflow.com/a/44562527/4953343
+std::string base64_decode(const std::string_view in) {
+  // table from '+' to 'z'
+  const uint8_t lookup[] = {
+      62,  255, 62,  255, 63,  52,  53, 54, 55, 56, 57, 58, 59, 60, 61, 255,
+      255, 0,   255, 255, 255, 255, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+      10,  11,  12,  13,  14,  15,  16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+      255, 255, 255, 255, 63,  255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+      36,  37,  38,  39,  40,  41,  42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+  static_assert(sizeof(lookup) == 'z' - '+' + 1);
+
+  std::string out;
+  int val = 0, valb = -8;
+  for (uint8_t c : in) {
+    if (c < '+' || c > 'z')
+      break;
+    c -= '+';
+    if (lookup[c] >= 64)
+      break;
+    val = (val << 6) + lookup[c];
+    valb += 6;
+    if (valb >= 0) {
+      out.push_back(char((val >> valb) & 0xFF));
+      valb -= 8;
+    }
+  }
+  return out;
 }
