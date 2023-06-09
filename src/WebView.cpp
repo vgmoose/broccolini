@@ -3,6 +3,7 @@
 #include "../utils/BrocContainer.hpp"
 #include "../libs/chesto/src/ImageElement.hpp"
 #include "../libs/chesto/src/NetImageElement.hpp"
+#include "URLBar.hpp"
 
 #include <iostream>
 
@@ -24,12 +25,21 @@ WebView::WebView()
     this->width = RootDisplay::screenWidth;
     this->height = RootDisplay::screenHeight;
 
+    // create URL bar
+    urlBar = new URLBar(this);
+    child(urlBar);
+
     // all webviews are assumed to be full screen
     RootDisplay::mainDisplay->windowResizeCallback = [this]() {
         this->width = RootDisplay::screenWidth;
         this->height = RootDisplay::screenHeight;
         this->needsRender = true;
         this->needsRedraw = true;
+
+        urlBar->width = RootDisplay::screenWidth;
+        urlBar->recalcPosition(this);
+
+        // TODO: put all images off-screen so that they won't be in the wrong place temporarily
     };
 }
 
@@ -40,7 +50,9 @@ bool WebView::process(InputEvents *event)
         needsLoad = false;
         return true;
     }
-    // ((NetImageElement*)elements[0])->load();
+
+    // TODO: show click event
+
     // keep processing child elements
     return ListElement::processUpDown(event) || ListElement::process(event);
 }

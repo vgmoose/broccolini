@@ -8,6 +8,7 @@
 
 // TODO: no forward declare
 class BrocContainer;
+class URLBar;
 
 class WebView : public ListElement
 {
@@ -20,6 +21,7 @@ public:
     BrocContainer* container = nullptr;
     int redirectCount = 0;
 
+    URLBar* urlBar = NULL;
 
     void downloadPage();
     void handle_http_code(int httpCode, std::map<std::string, std::string> headerResp);
