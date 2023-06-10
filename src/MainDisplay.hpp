@@ -4,10 +4,15 @@
 #include "../libs/chesto/src/RootDisplay.hpp"
 #include <unordered_map>
 
+// TODO: no forward declaration
+class URLBar;
+
 class MainDisplay : public RootDisplay
 {
 public:
 	MainDisplay();
 	bool process(InputEvents* event);
 	int mainLoop();
+
+	URLBar* urlBar = NULL;
 };

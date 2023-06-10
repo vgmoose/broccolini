@@ -3,6 +3,7 @@
 #include "../utils/BrocContainer.hpp"
 #include "../libs/chesto/src/ImageElement.hpp"
 #include "../libs/chesto/src/NetImageElement.hpp"
+#include "MainDisplay.hpp"
 #include "URLBar.hpp"
 
 #include <iostream>
@@ -10,11 +11,11 @@
 WebView::WebView()
 {
     // download the target page
-    this->url = "vgmoose.com";
+    // this->url = "vgmoose.com";
     // this->url = "wikipedia.org";
     // this->url = "serebii.net";
     // this->url = "cute puppies";
-    // this->url = "https://en.wikipedia.org/wiki/Main_Page";
+    this->url = "https://en.wikipedia.org/wiki/Main_Page";
     // this->url = "https://maschell.github.io";
     // this->url = "https://www.w3.org/Style/Examples/007/fonts.en.html";
     // this->url = "https://www.w3.org/Style/CSS/Test/CSS1/current/test5526c.htm";
@@ -24,23 +25,6 @@ WebView::WebView()
 
     this->width = RootDisplay::screenWidth;
     this->height = RootDisplay::screenHeight;
-
-    // create URL bar
-    urlBar = new URLBar(this);
-    child(urlBar);
-
-    // all webviews are assumed to be full screen
-    RootDisplay::mainDisplay->windowResizeCallback = [this]() {
-        this->width = RootDisplay::screenWidth;
-        this->height = RootDisplay::screenHeight;
-        this->needsRender = true;
-        this->needsRedraw = true;
-
-        urlBar->width = RootDisplay::screenWidth;
-        urlBar->recalcPosition(this);
-
-        // TODO: put all images off-screen so that they won't be in the wrong place temporarily
-    };
 }
 
 bool WebView::process(InputEvents *event)
@@ -65,7 +49,12 @@ void WebView::render(Element *parent)
 
     if (container != nullptr) {
         litehtml::position posObj = litehtml::position(0, 0, RootDisplay::screenWidth, RootDisplay::screenHeight);
-        this->m_doc->draw((litehtml::uint_ptr)container, this->x, this->y, &posObj);
+        this->m_doc->draw(
+            (litehtml::uint_ptr)container,
+            this->x,
+            this->y,
+            &posObj
+        );
     }
 
     // render the child elements (above whatever we just drew)
@@ -126,6 +115,7 @@ void WebView::handle_http_code(int httpCode, std::map<std::string, std::string> 
     if (httpCode == 301 || httpCode == 302) {
         // redirect (TODO: cache?)
         this->url = sanitize_url(headerResp["location"], this->url.find("https://") != std::string::npos);
+        ((MainDisplay*)RootDisplay::mainDisplay)->urlBar->updateInfo();
         redirectCount ++;
         downloadPage();
     }
