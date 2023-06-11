@@ -13,6 +13,8 @@ public:
     WebView* webView = NULL;
     TextElement* urlText = NULL;
 
-    // bool process(InputEvents* event);
+    void showKeyboard();
+
+    bool process(InputEvents* event);
     void render(Element* parent);
 };

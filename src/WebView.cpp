@@ -7,6 +7,9 @@
 #include "URLBar.hpp"
 
 #include <iostream>
+#include <string>
+#include <regex>
+#include <iterator>
 
 WebView::WebView()
 {
@@ -21,6 +24,7 @@ WebView::WebView()
     // this->url = "https://www.w3.org/Style/CSS/Test/CSS1/current/test5526c.htm";
     // this->url = "http://acid2.acidtests.org/#top";
     // this->url = "http://acid3.acidtests.org";
+    // this->url = "http://localhost:8000";
     needsLoad = true;
 
     this->width = RootDisplay::screenWidth;
@@ -147,6 +151,13 @@ void WebView::downloadPage()
 
     // litehtml::context ctx;
     // ctx.load_master_stylesheet(RAMFS "master.css");
+
+    // hack to show flex box containers
+    // std::replace(this->contents.begin(), this->contents.end(), "flex", "block");
+    // std::regex e ("\\b(sub)([^ ]*)");   // matches words beginning by "sub"
+    // // using string/c-string (3) version:
+    // std::cout << std::regex_replace (this->contents, e, "sub-$2");
+    // std::cout << std::endl;
 
     container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());

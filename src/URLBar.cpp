@@ -2,6 +2,7 @@
 #include "../utils/Utils.hpp"
 #include "../libs/chesto/src/TextElement.hpp"
 #include "../libs/chesto/src/Constraint.hpp"
+#include "../libs/chesto/src/EKeyboard.hpp"
 
 URLBar::URLBar(WebView* webView)
 {
@@ -25,21 +26,34 @@ void URLBar::updateInfo() {
     urlText->update();
 }
 
-// bool URLBar::process(InputEvents* event) {
-//     return true;
-// }
+void URLBar::showKeyboard() {
+    auto keyboard = new EKeyboard();
+    keyboard->hasRoundedKeys = true;
+    keyboard->updateSize();
+    child(keyboard);
+}
+
+bool URLBar::process(InputEvents* event) {
+    if (event->isTouchDown()) {
+        if (event->touchIn(this->x, this->y, this->width, this->height)) {
+            showKeyboard();
+            return true;
+        }
+    }
+    return Element::process(event);
+}
 
 void URLBar::render(Element* parent) {
     // Draw background
 
     CST_Rect rect = { 0, 0, width, height };
-    CST_SetDrawColorRGBA(RootDisplay::renderer, 0xee, 0xee, 0xee, 0xff);
+    CST_SetDrawColorRGBA(RootDisplay::renderer, 0xdd, 0xdd, 0xdd, 0xff);
     CST_FillRect(RootDisplay::renderer, &rect);
 
     auto innerWidth = width * 0.8;
     auto innerHeight = height * 0.6;
 
-    CST_roundedBoxRGBA(RootDisplay::renderer, width/2 -  innerWidth/2, height/2 - innerHeight/2, width/2 +  innerWidth/2, height/2 + innerHeight/2, 10, 0xdd, 0xdd, 0xdd, 0xff);
+    CST_roundedBoxRGBA(RootDisplay::renderer, width/2 -  innerWidth/2, height/2 - innerHeight/2, width/2 +  innerWidth/2, height/2 + innerHeight/2, 10, 0xee, 0xee, 0xee, 0xff);
 
     Element::render(parent);
 }
