@@ -1,0 +1,32 @@
+name: Build console apps
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  all:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: wiiu
+            ext: wuhb
+          - platform: switch
+            ext: nro
+    container:
+      image: ghcr.io/fortheusers/sealeo:latest
+    steps:
+    - uses: actions/checkout@main
+      with:
+        submodules: recursive
+    - name: Build ${{ matrix.platform }}
+      run: make ${{ matrix.platform }}
+    - uses: actions/upload-artifact@v3
+      with:
+        name: broccolini.${{ matrix.ext }}
+        path: /__w/broccolini/broccolini/broccolini.${{ matrix.ext }}
