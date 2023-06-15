@@ -5,6 +5,29 @@
 #include "../libs/chesto/src/Constraint.hpp"
 #include "../libs/chesto/src/EKeyboard.hpp"
 
+#define BUTTON_SIZE 50
+
+Element* makeURLBarButton(const char* iconPath, std::function<bool()> action) {
+    int iconSize = 30;
+    Element* base = (new Element())
+        ->setTouchable(true)
+        ->setAction(action);
+
+    base->width = BUTTON_SIZE;
+    base->height = BUTTON_SIZE;
+
+    base->child(
+        (new ImageElement(iconPath))
+        ->setSize(iconSize, iconSize)
+        ->centerIn(base)
+    );
+
+    // center the button in the middle of the bar
+    base->constrain(ALIGN_CENTER_VERTICAL, 0);
+
+    return base;
+}
+
 URLBar::URLBar(WebView* webView)
 {
     this->webView = webView;
@@ -16,65 +39,45 @@ URLBar::URLBar(WebView* webView)
 
     CST_Color gray = { 80, 80, 80, 0xff };
 
-    urlText = new TextElement(webView->url.c_str(), 24, &gray);
+    urlText = new TextElement(webView->url.c_str(), 28, &gray);
     urlText->constrain(ALIGN_CENTER_HORIZONTAL, 0);
     urlText->constrain(ALIGN_CENTER_VERTICAL, 0);
     child(urlText);
 
-    int iconSize = 30;
+    auto innerWidth = width * 0.8; // TODO: make a variable somewhere
+    int btnAndPadding = BUTTON_SIZE + 10;
+    int sidePadding = 14;
 
-    // set up icons
-    child(
-        (new ImageElement(RAMFS "res/icons/back.svg"))
-        ->setSize(iconSize, iconSize)
-        ->setPosition(20, height/2 - iconSize/2)
-        ->setTouchable(true)
-        ->setAction(
-            [webView]() {
-                printf("Got back\n");
-                return true;
-            }
-        )
-    );
+    child(makeURLBarButton(RAMFS "res/icons/back.svg", [webView]() {
+        printf("Got back\n");
+        return true;
+    })->constrain(ALIGN_LEFT, sidePadding));
+    // })->setPosition(width/2 - innerWidth/2 - btnAndPadding * 2 + 5, 0));
 
-    child(
-        (new ImageElement(RAMFS "res/icons/forward.svg"))
-        ->setSize(iconSize, iconSize)
-        ->setPosition(70, height/2 - iconSize/2)
-        ->setTouchable(true)
-        ->setAction(
-            [webView]() {
-                printf("Got forward\n");
-                return true;
-            }
-        )
-    );
+    forwardButton = makeURLBarButton(RAMFS "res/icons/forward.svg", [webView]() {
+        printf("Got forward\n");
+        return true;
+    })->constrain(ALIGN_LEFT, sidePadding/2 + btnAndPadding);
+    // })->setPosition(width/2 - innerWidth/2 - btnAndPadding - 5, 0);
+    // child(forwardButton);
 
-    child(
-        (new ImageElement(RAMFS "res/icons/add.svg"))
-        ->setSize(iconSize, iconSize)
-        ->setPosition(width - 110, height/2 - iconSize/2)
-        ->setTouchable(true)
-        ->setAction(
-            [webView]() {
-                printf("Got Add\n");
-                return true;
-            }
-        )
-    );
+    clockButton = (new ClockElement())
+        ->constrain(ALIGN_CENTER_VERTICAL, 0)
+        ->constrain(ALIGN_LEFT, sidePadding/2 + btnAndPadding);
+        // ->setPosition(forwardButton->x, 0);
+    child(clockButton);
 
-    child(
-        (new ImageElement(RAMFS "res/icons/tabs.svg"))
-        ->setSize(iconSize, iconSize)
-        ->setPosition(width - 60, height/2 - iconSize/2)
-        ->setTouchable(true)
-        ->setAction(
-            [webView]() {
-                printf("Got Tabs\n");
-                return true;
-            }
-        )
-    );
+    child(makeURLBarButton(RAMFS "res/icons/add.svg", [webView]() {
+        printf("Got Add\n");
+        return true;
+    })->constrain(ALIGN_RIGHT, sidePadding/2 + btnAndPadding));
+    // })->setPosition(width/2 + innerWidth/2 + 9, 0));
+
+    child(makeURLBarButton(RAMFS "res/icons/tabs.svg", [webView]() {
+        printf("Got Tabs\n");
+        return true;
+    })->constrain(ALIGN_RIGHT, sidePadding));
+    // })->setPosition(width/2 + innerWidth/2 + btnAndPadding + 9 - 5, 0));
     
     
     // auto backIcon = new ImageElement("assets/back.png");
@@ -95,19 +98,29 @@ void URLBar::showKeyboard() {
 }
 
 bool URLBar::process(InputEvents* event) {
-    if (event->isTouchDown()) {
-        auto innerWidth = width * 0.8;
-        auto innerHeight = height * 0.6;
-        if (event->touchIn(
-            width/2 -  innerWidth/2,
-            height/2 - innerHeight/2,
-            innerWidth,
-            innerHeight
-        )) {
+    auto innerWidth = width * 0.8;
+    auto innerHeight = height * 0.75;
+
+    if (event->touchIn(
+        width/2 -  innerWidth/2,
+        height/2 - innerHeight/2,
+        innerWidth,
+        innerHeight
+    )) {
+        if (event->isTouchDown()) {
+            highlightingKeyboard = true;
+            return true;
+        } else if (highlightingKeyboard && event->isTouchUp()) {
             showKeyboard();
+            highlightingKeyboard = false;
             return true;
         }
+    } else if (event->isTouchDrag()) {
+        // we're dragging outside of the url bar
+        highlightingKeyboard = false;
+        return true;
     }
+
     return Element::process(event);
 }
 
@@ -119,7 +132,7 @@ void URLBar::render(Element* parent) {
     CST_FillRect(RootDisplay::renderer, &rect);
 
     auto innerWidth = width * 0.8;
-    auto innerHeight = height * 0.6;
+    auto innerHeight = height * 0.75;
 
     CST_roundedBoxRGBA(
         RootDisplay::renderer,
@@ -127,7 +140,25 @@ void URLBar::render(Element* parent) {
         height/2 - innerHeight/2,
         width/2 +  innerWidth/2,
         height/2 + innerHeight/2,
-        10, 0xee, 0xee, 0xee, 0xff);
+        15, 0xee, 0xee, 0xee, 0xff);
+    
+    if (highlightingKeyboard) {
+        CST_roundedBoxRGBA(
+            RootDisplay::renderer,
+            width/2 -  innerWidth/2,
+            height/2 - innerHeight/2,
+            width/2 +  innerWidth/2,
+            height/2 + innerHeight/2,
+            15, 0xad, 0xd8, 0xe6, 0x90);
+        CST_roundedRectangleRGBA(
+            RootDisplay::renderer,
+            width/2 -  innerWidth/2,
+            height/2 - innerHeight/2,
+            width/2 +  innerWidth/2,
+            height/2 + innerHeight/2,
+            15, 0x66, 0x7c, 0x89, 0x90);
+        
+    }
 
     Element::render(parent);
 }

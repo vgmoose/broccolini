@@ -308,7 +308,41 @@ void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const l
 }
 
 void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el ) {
-    std::cout << "Anchor clicked: " << url << std::endl;
+    // std::cout << "Anchor clicked: " << url << " with element: " << el->get_tagName() << std::endl;
+    auto pos = el->get_placement();
+    litehtml::size sz;
+    int maxWidth = 0;
+    el->get_content_size(sz, maxWidth);
+
+    if (webView->nextLinkHref == "") {
+        // next element is not set, so we're on touch down
+        // webView->nextLinkOverlay->hidden = false;
+        webView->nextLinkOverlay.x = webView->x + pos.x;
+        webView->nextLinkOverlay.y = webView->y + pos.y;
+        webView->nextLinkOverlay.w = 100;
+        webView->nextLinkOverlay.h = 30;
+        webView->nextLinkHref = url;
+
+        return; // return early
+    }
+    else if (webView->nextLinkHref == url) {
+        // we got a touch up on the same element, so we're good to go
+        // webView->nextLinkOverlay->hidden = true;
+        
+        // do the actual redirect
+        std::string newUrl = resolve_url(url, "");
+        printf("WOULD'VE REDIRECTED TO: %s\n", newUrl.c_str());
+
+        // webView->url = newUrl;
+        // webView->downloadPage();
+        // this->set_base_url(newUrl.c_str());
+        // webView->m_doc = litehtml::document::createFromString(webView->contents.c_str(), this);
+        // webView->needsRender = true;
+    }
+
+    // unset the next link, we're either not on the same element or we're done redirecting
+    webView->nextLinkHref = "";
+
 }
 
 void BrocContainer::set_cursor(const char* cursor ) {
@@ -330,7 +364,7 @@ void BrocContainer::import_css(litehtml::string& text, const litehtml::string& u
 }
 
 void BrocContainer::set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius) {
-    // printf("Call to set_clip\n");
+    // printf("Call to set_clip with position: %d, %d, %d, %d, and border radiuses: %d, %d, %d, %d\n", pos.left(), pos.top(), pos.right(), pos.bottom(), bdr_radius.top_left_x, bdr_radius.top_left_y, bdr_radius.bottom_right_x, bdr_radius.bottom_right_y);
 }
 
 void BrocContainer::del_clip( ) {
@@ -346,6 +380,11 @@ void BrocContainer::get_client_rect(litehtml::position& client ) const {
 
 std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
     // std::cout << "Requested to create an element: " << tag_name << std::endl;
+
+    // if (strcmp(tag_name, "a") == 0) {
+    //     // std::cout << "Creating an image element" << std::endl;
+    //     std::cout << " Got an a tag with href attribute: " << attributes.at("href") << std::endl;
+    // }
 
     // // print out each attribute
     // for (auto& attr : attributes) {

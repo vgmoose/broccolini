@@ -2,6 +2,7 @@
 
 #include "../libs/chesto/src/TextElement.hpp"
 #include "WebView.hpp"
+#include "ClockElement.hpp"
 #include <string>
 
 class URLBar : public Element
@@ -12,6 +13,11 @@ public:
 
     WebView* webView = NULL;
     TextElement* urlText = NULL;
+
+    bool highlightingKeyboard = false;
+
+    Element* forwardButton = NULL;
+    Element* clockButton = NULL;
 
     void showKeyboard();
 

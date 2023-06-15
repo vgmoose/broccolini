@@ -31,7 +31,7 @@ WebView::WebView()
     this->height = RootDisplay::screenHeight;
 }
 
-bool WebView::process(InputEvents *event)
+bool WebView::process(InputEvents* e)
 {
     if (needsLoad) {
         this->downloadPage();
@@ -39,10 +39,42 @@ bool WebView::process(InputEvents *event)
         return true;
     }
 
-    // TODO: show click event
+    litehtml::position::vector redraw_boxes;
+
+    if (e->isTouchDown()) {
+        // we call up first so that we can get the element that will clicked, and display it as highlighted
+        bool resp = this->m_doc->on_lbutton_up(
+            -1*this->x + e->xPos, -1*this->y + e->yPos,
+            e->xPos, e->yPos,
+            redraw_boxes
+        );
+        resp = this->m_doc->on_lbutton_down(
+            -1*this->x + e->xPos, -1*this->y + e->yPos,
+            e->xPos, e->yPos,
+            redraw_boxes
+        );
+        // printf("Got touch down with response %d\n", redraw_boxes.size());
+    } else if (e->isTouchUp()) {
+        bool resp = this->m_doc->on_lbutton_up(
+            -1*this->x + e->xPos, -1*this->y + e->yPos,
+            e->xPos, e->yPos,
+            redraw_boxes
+        );
+        // printf("Got touch up with response %d\n", redraw_boxes.size());
+    } else if (e->isTouchDrag()) {
+        bool resp = this->m_doc->on_mouse_over(
+            -1*this->x + e->xPos, -1*this->y + e->yPos,
+            e->xPos, e->yPos,
+            redraw_boxes
+        );
+        // printf("Got touch drag with response %d\n", redraw_boxes.size());
+    }
+    
+    // TODO: how to use this?
+    // bool litehtml::document::on_mouse_leave( position::vector& redraw_boxes );
 
     // keep processing child elements
-    return ListElement::processUpDown(event) || ListElement::process(event);
+    return ListElement::processUpDown(e) || ListElement::process(e);
 }
 
 void WebView::render(Element *parent)
@@ -63,6 +95,12 @@ void WebView::render(Element *parent)
 
     // render the child elements (above whatever we just drew)
     ListElement::render(parent);
+
+    // render the overlay of the next link, if it's set
+    auto renderer = RootDisplay::mainDisplay->renderer;
+    CST_SetDrawColorRGBA(renderer, 0x00, 0xff, 0xff, 0x80);
+    CST_FillRect(renderer, &nextLinkOverlay);
+    printf("Drawing a drect at %d, %d, %d, %d\n", nextLinkOverlay.x, nextLinkOverlay.y, nextLinkOverlay.w, nextLinkOverlay.h);
 }
 
 std::string uri_encode(std::string uri) {
