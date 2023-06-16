@@ -33,6 +33,9 @@ WebView::WebView()
 
 bool WebView::process(InputEvents* e)
 {
+    if (hidden) {
+        return false;
+    }
     if (needsLoad) {
         this->downloadPage();
         needsLoad = false;
@@ -67,6 +70,7 @@ bool WebView::process(InputEvents* e)
             e->xPos, e->yPos,
             redraw_boxes
         );
+        nextLinkHref = "";
         // printf("Got touch drag with response %d\n", redraw_boxes.size());
     }
     
@@ -79,17 +83,24 @@ bool WebView::process(InputEvents* e)
 
 void WebView::render(Element *parent)
 {
-    if (needsRender) {
+    if (hidden) {
+        return;
+    }
+    if (needsRender && this->m_doc != nullptr) {
         this->m_doc->render(this->width);
+    }
+
+    if (prevContainer != nullptr) {
+        // printf("Freeing container\n");
+        delete prevContainer;
+        prevContainer = nullptr;
     }
 
     if (container != nullptr) {
         litehtml::position posObj = litehtml::position(0, 0, RootDisplay::screenWidth, RootDisplay::screenHeight);
         this->m_doc->draw(
             (litehtml::uint_ptr)container,
-            this->x,
-            this->y,
-            &posObj
+            this->x, this->y, &posObj
         );
     }
 
@@ -97,10 +108,15 @@ void WebView::render(Element *parent)
     ListElement::render(parent);
 
     // render the overlay of the next link, if it's set
-    auto renderer = RootDisplay::mainDisplay->renderer;
-    CST_SetDrawColorRGBA(renderer, 0x00, 0xff, 0xff, 0x80);
-    CST_FillRect(renderer, &nextLinkOverlay);
-    printf("Drawing a drect at %d, %d, %d, %d\n", nextLinkOverlay.x, nextLinkOverlay.y, nextLinkOverlay.w, nextLinkOverlay.h);
+    if (nextLinkHref != "") {
+        // iterate through the areas in webView->nextLinkRects
+        auto renderer = RootDisplay::mainDisplay->renderer;
+        for (auto rect : nextLinkRects) {
+            // draw a rectangle over the area
+            CST_roundedBoxRGBA(renderer, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0,  0xad, 0xd8, 0xe6, 0x90);
+            CST_roundedRectangleRGBA(renderer, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h, 0,  0x66, 0x7c, 0x89, 0x90);
+        }
+    }
 }
 
 std::string uri_encode(std::string uri) {
@@ -165,6 +181,9 @@ void WebView::handle_http_code(int httpCode, std::map<std::string, std::string> 
 
 void WebView::downloadPage()
 {
+    // if it's a mailto: link, display a message to open the mail app
+    bool isMailto = this->url.find("mailto:") == 0;
+
     this->url = sanitize_url(this->url);
     std::cout << "Downloading page: " << this->url << std::endl;
 
@@ -174,13 +193,18 @@ void WebView::downloadPage()
     int httpCode = 0;
     std::map<std::string, std::string> headerResp;
 
-    downloadFileToMemory(this->url, &this->contents, &httpCode, &headerResp);
+    if (isMailto) {
+        // TODO: extract all this special protocol detection logic
+        this->contents = "<html><body><br/><br/><br/><h1>Email link Detected</h1><p>Open a mail app to send an email to " + this->url.substr(7) + "</p></body></html>";
+    } else {
+        downloadFileToMemory(this->url, &this->contents, &httpCode, &headerResp);
+    }
 
     if (redirectCount > 10) {
         std::cout << "Too many redirects, aborting" << std::endl;
-        this->contents = "<html><body><h1>Too many redirects</h1></body></html>";
+        this->contents = "<html><body><br/><br/><br/><h1>Too many redirects</h1></body></html>";
     }
-    else if (httpCode != 200 && httpCode != 0) {
+    else if (httpCode != 200 && httpCode != 404 && httpCode != 0) {
         handle_http_code(httpCode, headerResp);
         return;
     }
@@ -197,10 +221,32 @@ void WebView::downloadPage()
     // std::cout << std::regex_replace (this->contents, e, "sub-$2");
     // std::cout << std::endl;
 
+    // TODO: extract all the below rendering logic into another method
+
+    if (container != nullptr) {
+        // delete all children
+        wipeAll();
+        
+        // TODO: crashes, deletes too early, but do this instead
+        prevContainer = container;
+    }
+
     container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());
 
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
     this->needsRender = true;
+
+    // clear and append the history up to this point, if the current index is not the current url
+    if (historyIndex < 0 || history[historyIndex] != this->url) {
+        history.erase(history.begin() + historyIndex + 1, history.end());
+        history.push_back(this->url);
+        historyIndex = history.size() - 1;
+
+        // show the clock
+        auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
+        urlBar->clockButton->hidden = false;
+        urlBar->forwardButton->hidden = true;
+    }
 
 }

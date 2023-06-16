@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../libs/chesto/src/TextElement.hpp"
+#include "../libs/chesto/src/EKeyboard.hpp"
 #include "WebView.hpp"
 #include "ClockElement.hpp"
 #include <string>
@@ -19,7 +20,10 @@ public:
     Element* forwardButton = NULL;
     Element* clockButton = NULL;
 
+    EKeyboard* keyboard = NULL;
+
     void showKeyboard();
+    void resetBar();
 
     bool process(InputEvents* event);
     void render(Element* parent);

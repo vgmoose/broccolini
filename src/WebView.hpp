@@ -17,11 +17,17 @@ public:
     std::string contents;
     litehtml::document::ptr m_doc;
 
+    std::vector<std::string> history;
+    int historyIndex = -1;
+
     BrocContainer* container = nullptr;
+    BrocContainer* prevContainer = nullptr;
     int redirectCount = 0;
 
-    // the "next" element to click touch event is successful (receives down and up with no movement in between)
-    CST_Rect nextLinkOverlay = {0, 0, 0, 0};
+    // a vector of all the rectangles of the currently being clicked link
+    std::vector<CST_Rect> nextLinkRects;
+
+    // the "next" url to load if a touch event is successful (receives down and up with no movement in between)
     std::string nextLinkHref = "";
 
     void downloadPage();

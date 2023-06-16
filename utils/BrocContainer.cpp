@@ -2,7 +2,10 @@
 #include "NetImageElement.hpp"
 #include "ImageElement.hpp"
 #include "../src/Base64Image.hpp"
+#include "../src/MainDisplay.hpp"
+#include "../src/URLBar.hpp"
 #include "Utils.hpp"
+#include "../libs/litehtml/include/litehtml/render_item.h"
 #include <sstream>
 #include <iostream>
 
@@ -135,7 +138,18 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
 
     printf("Going to resolve url: %s\n", src);
 
-    if (baseurl == 0 || *baseurl == '\0') {
+    if (
+        strncmp(src, "https://", 8) == 0
+        || strncmp(src, "http://", 7) == 0
+        || strncmp(src, "data:", 5) == 0
+        || strncmp(src, "mailto:", 7) == 0
+        || strncmp(src, "javascript:", 11) == 0
+    ) {
+        // this is a https/http/data/mailto/js uri, just use it directly
+        ss << src;
+        url = ss.str();
+    }
+    else if (baseurl == 0 || *baseurl == '\0') {
         if (strlen(src) > 0 && src[0] == '/') {
             if (strlen(src) > 1 && src[1] == '/') {
                 // this is a starting double "//" url, just take the protocol
@@ -304,53 +318,90 @@ void BrocContainer::set_base_url(const char* base_url ) {
 void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const litehtml::element::ptr& el ) {
     auto href = el->get_attr("href");
     auto rel = el->get_attr("rel");
-    std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
+    // std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
 }
 
-void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el ) {
-    // std::cout << "Anchor clicked: " << url << " with element: " << el->get_tagName() << std::endl;
-    auto pos = el->get_placement();
-    litehtml::size sz;
-    int maxWidth = 0;
-    el->get_content_size(sz, maxWidth);
+// returns each render item's box positions, with placement offsets
+std::vector<std::tuple<litehtml::position, litehtml::size>> get_draw_areas(
+    std::list<std::weak_ptr<litehtml::render_item>> m_renders
+)
+{
+	std::vector<std::tuple<litehtml::position, litehtml::size>> all_areas;
+	for(const auto& ri_el : m_renders)
+	{
+		auto ri = ri_el.lock();
+		if(ri)
+		{
+			litehtml::position::vector boxes;
+			ri->get_inline_boxes(boxes);
+
+			// all boxes will have their placements added to them
+			auto render_pos = ri->get_placement();
+			
+			for(auto & box : boxes)
+			{
+				litehtml::position pos;
+				pos.x = render_pos.x + box.x;
+				pos.y = render_pos.y + box.y;
+
+				all_areas.push_back(std::make_tuple(
+					pos,
+					litehtml::  size(box.width, box.height)
+				));
+			}
+		}
+	}
+	return all_areas;
+}
+
+// struct MyElement {
+//     void* test;
+//     std::list<std::weak_ptr<litehtml::render_item>> m_renders;
+// };
+
+void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el) {
+
+    // use a hack to grab the internal render list from the target element
+    // TODO: not do this? either fork litehtml or find another way
+
+    // litehtml::element* element_ptr = el.get();
+    // auto m_renders = reinterpret_cast<MyElement*>(element_ptr)->m_renders;
+    // auto draw_areas = get_draw_areas(m_renders);
+    auto draw_areas = get_draw_areas(el->m_renders);
 
     if (webView->nextLinkHref == "") {
-        // next element is not set, so we're on touch down
-        // webView->nextLinkOverlay->hidden = false;
-        webView->nextLinkOverlay.x = webView->x + pos.x;
-        webView->nextLinkOverlay.y = webView->y + pos.y;
-        webView->nextLinkOverlay.w = 100;
-        webView->nextLinkOverlay.h = 30;
+        // copy the data from the areas in the CST_Rects of nextLinkRects
+        webView->nextLinkRects.clear();
+        for (auto area : draw_areas) {
+            auto pos = std::get<0>(area);
+            auto sz  = std::get<1>(area);
+            CST_Rect rect = {
+                webView->x + pos.x, webView->y + pos.y,
+                sz.width, sz.height
+            };
+            webView->nextLinkRects.push_back(rect);
+        }
         webView->nextLinkHref = url;
-
         return; // return early
     }
     else if (webView->nextLinkHref == url) {
-        // we got a touch up on the same element, so we're good to go
-        // webView->nextLinkOverlay->hidden = true;
-        
         // do the actual redirect
         std::string newUrl = resolve_url(url, "");
-        printf("WOULD'VE REDIRECTED TO: %s\n", newUrl.c_str());
+        webView->url = newUrl;
+        webView->needsLoad = true;
 
-        // webView->url = newUrl;
-        // webView->downloadPage();
-        // this->set_base_url(newUrl.c_str());
-        // webView->m_doc = litehtml::document::createFromString(webView->contents.c_str(), this);
-        // webView->needsRender = true;
+        auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
+        urlBar->urlText->setText(webView->url.c_str());
+        urlBar->urlText->update();
     }
-
-    // unset the next link, we're either not on the same element or we're done redirecting
-    webView->nextLinkHref = "";
-
 }
 
 void BrocContainer::set_cursor(const char* cursor ) {
-    std::cout << "Setting cursor to: " << cursor << std::endl;
+    // std::cout << "Setting cursor to: " << cursor << std::endl;
 }
 
 void BrocContainer::transform_text(litehtml::string& text, litehtml::text_transform tt ) {
-    std::cout << "Transforming text: " << text << std::endl;
+    // std::cout << "Transforming text: " << text << std::endl;
 }
 
 void BrocContainer::import_css(litehtml::string& text, const litehtml::string& url, litehtml::string& baseurl ) {

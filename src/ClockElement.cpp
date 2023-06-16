@@ -57,6 +57,8 @@ bool ClockElement::process(InputEvents* event) {
 }
 
 void ClockElement::render(Element* parent) {
+    if (hidden) return;
+
     auto renderer = RootDisplay::renderer;
 
     std::ostringstream str1;

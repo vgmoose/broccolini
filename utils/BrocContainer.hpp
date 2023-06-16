@@ -1,4 +1,9 @@
+// hack from http://bloglitb.blogspot.com/2010/07/access-to-private-members-thats-easy.html?showComment=1295796252322#c5854041234530206755 to access private members of litehtml
+// TODO: either fork litehtml or submit a PR to not have to do this
+#define private public
+#define protected public
 #include <litehtml.h>
+
 #include "../libs/chesto/src/NetImageElement.hpp"
 #include "../src/WebView.hpp"
 
@@ -9,7 +14,7 @@ public:
     std::string base_url; // eg. https://site.com/path/to/page
     std::string base_domain; // eg. https://site.com
     std::string protocol; // eg. https
-    WebView* webView;
+    WebView* webView = NULL;
 
     int eternalCounter = 0; // used for some incremental ids
 
