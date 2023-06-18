@@ -10,25 +10,19 @@
 #include <string>
 #include <regex>
 #include <iterator>
+#include <fstream>
+#include <sstream>
 
 WebView::WebView()
 {
-    // download the target page
-    // this->url = "vgmoose.com";
-    // this->url = "wikipedia.org";
-    // this->url = "serebii.net";
-    // this->url = "cute puppies";
-    this->url = "https://en.wikipedia.org/wiki/Main_Page";
-    // this->url = "https://maschell.github.io";
-    // this->url = "https://www.w3.org/Style/Examples/007/fonts.en.html";
-    // this->url = "https://www.w3.org/Style/CSS/Test/CSS1/current/test5526c.htm";
-    // this->url = "http://acid2.acidtests.org/#top";
-    // this->url = "http://acid3.acidtests.org";
-    // this->url = "http://localhost:8000";
+    this->url = "special://home";
     needsLoad = true;
 
     this->width = RootDisplay::screenWidth;
     this->height = RootDisplay::screenHeight;
+
+    // put a random number into the ID string
+    this->id = std::to_string(rand()) + std::to_string(rand());
 }
 
 bool WebView::process(InputEvents* e)
@@ -183,6 +177,7 @@ void WebView::downloadPage()
 {
     // if it's a mailto: link, display a message to open the mail app
     bool isMailto = this->url.find("mailto:") == 0;
+    bool isSpecial = this->url.find("special:") == 0;
 
     this->url = sanitize_url(this->url);
     std::cout << "Downloading page: " << this->url << std::endl;
@@ -196,6 +191,15 @@ void WebView::downloadPage()
     if (isMailto) {
         // TODO: extract all this special protocol detection logic
         this->contents = "<html><body><br/><br/><br/><h1>Email link Detected</h1><p>Open a mail app to send an email to " + this->url.substr(7) + "</p></body></html>";
+    } else if (isSpecial) {
+        // extract the name of the special page
+        std::string specialName = this->url.substr(8);
+        // load it from RAMFS
+        std::string specialPath = RAMFS "res/pages/" + specialName + ".html";
+        std::ifstream t(specialPath);
+        std::stringstream buffer;
+        buffer << t.rdbuf();
+        this->contents = buffer.str();
     } else {
         downloadFileToMemory(this->url, &this->contents, &httpCode, &headerResp);
     }
@@ -249,4 +253,18 @@ void WebView::downloadPage()
         urlBar->forwardButton->hidden = true;
     }
 
+}
+
+std::string WebView::fullSessionSummary() {
+    std::string summary = "\t\t{\n";
+    summary += "\t\t\t\"id\": \"" + id + "\",\n";
+    summary += "\t\t\t\"urlIndex\": " + std::to_string(historyIndex) + ",\n";
+    summary += "\t\t\t\"urls\": \[\n";
+    for (auto url : history) {
+        summary += "\t\t\t\t\"" + url + "\",\n";
+    }
+    // remove the last comma
+    summary = summary.substr(0, summary.size() - 2);
+    summary += "\n\t\t\t]\n\t\t}";
+    return summary;
 }

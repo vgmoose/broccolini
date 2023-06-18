@@ -112,6 +112,7 @@ URLBar::URLBar(WebView* webView)
 
     child(makeURLBarButton(RAMFS "res/icons/add.svg", [this]() {
         // create a new webview
+        saveCurTabScreenshot();
         auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
         int idx = mainDisplay->createNewTab();
         this->webView = mainDisplay->setActiveTab(idx);
@@ -121,21 +122,36 @@ URLBar::URLBar(WebView* webView)
 
     child(makeURLBarButton(RAMFS "res/icons/tabs.svg", [this]() {
         // temporary: just go to the next tab
+        saveCurTabScreenshot();
         auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-        this->webView = mainDisplay->setActiveTab((mainDisplay->activeTabIndex + 1) % mainDisplay->allTabs.size());
-        this->resetBar();
+        // this->webView = mainDisplay->setActiveTab((mainDisplay->activeTabIndex + 1) % mainDisplay->allTabs.size());
+        // this->resetBar();
+
+        // set up the new tab screen 
+        if (tabSwitcher == NULL) {
+            tabSwitcher = new TabSwitcher();
+        }
+        mainDisplay->switchSubscreen(tabSwitcher);
+        
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding));
     
     
     // add bookmark and refresh buttons within the url text
     // TODO: actually put these in the bar, instead of just being normal buttons
-    child(makeURLBarButton(RAMFS "res/icons/star.svg", [webView]() {
-        printf("Got Bookmark\n");
+    child(makeURLBarButton(RAMFS "res/icons/star.svg", [this]() {
+        auto webView = this->webView;
+        // take a screen shot of the current view 
+        auto favThumbPath = "./data/favorites/" + base64_encode(webView->url) + ".png";
+        webView->screenshot(favThumbPath);
+        // add the url to the favorites list
+        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+        mainDisplay->favorites.push_back(webView->url);
         return true;
     })->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding*2 + 10));
 
-    child(makeURLBarButton(RAMFS "res/icons/refresh.svg", [webView]() {
+    child(makeURLBarButton(RAMFS "res/icons/refresh.svg", [this]() {
+        auto webView = this->webView;
         webView->needsLoad = true;
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding/3 + btnAndPadding*2 + 10));
@@ -255,4 +271,9 @@ void URLBar::render(Element* parent) {
     }
 
     Element::render(parent);
+}
+
+void URLBar::saveCurTabScreenshot() {
+    auto screenshotPath = "./data/tabs/" + webView->id + ".png";
+    webView->screenshot(screenshotPath);
 }

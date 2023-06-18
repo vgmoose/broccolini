@@ -20,7 +20,10 @@ public:
 	std::vector<WebView*> allTabs;
 	int activeTabIndex = 0;
 
+	std::vector<std::string> favorites;
+
 	WebView* setActiveTab(int index);
 	int createNewTab();
 	WebView* getActiveWebView();
+	std::string fullSessionSummary();
 };

@@ -49,3 +49,5 @@ int remove_empty_dirs(const char* name, int count);
 const std::string dir_name(std::string file_path);
 bool compareLen(const std::string& a, const std::string& b);
 std::string base64_decode(const std::string_view encoded_string);
+std::string base64_encode(const std::string_view bytes_to_encode);
+std::string just_domain_from_url(const std::string& url);

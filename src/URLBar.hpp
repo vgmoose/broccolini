@@ -4,6 +4,7 @@
 #include "../libs/chesto/src/EKeyboard.hpp"
 #include "WebView.hpp"
 #include "ClockElement.hpp"
+#include "TabSwitcher.hpp"
 #include <string>
 
 class URLBar : public Element
@@ -14,6 +15,7 @@ public:
 
     WebView* webView = NULL;
     TextElement* urlText = NULL;
+    TabSwitcher* tabSwitcher = NULL;
 
     bool highlightingKeyboard = false;
 
@@ -24,6 +26,7 @@ public:
 
     void showKeyboard();
     void resetBar();
+    void saveCurTabScreenshot();
 
     bool process(InputEvents* event);
     void render(Element* parent);

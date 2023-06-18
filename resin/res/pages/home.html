@@ -1,0 +1,82 @@
+<html>
+    <head>
+        <title>New Tab - Broccolini</title>
+        <style>
+            html, body {
+                font-family: sans-serif;
+                margin: 0 auto;
+                background-color: #fafafa;
+            }
+            #RestoreSession {
+                display: none;
+                background-color: #f1f1f1;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 20px;
+            }
+            #FavoritesContainer {
+                display: block;
+                margin: 0 auto;
+                width: 95%;
+
+            }
+            .Favorite {
+                display: inline-block;
+                text-align: center;
+                margin-left: 11px;
+                margin-right: 11px;
+                padding: 11px;
+                background-color: #f1f1f1;
+                border-radius: 10px;
+            }
+            .Favorite p {
+                padding: 0px;
+                margin: 0px;
+            }
+            .Favorite img {
+                width: 250px;
+                height: 140px;
+            }
+        </style>
+    </head>
+    <body>
+        <br/><br/>
+        <div id="RestoreSession">
+            <h2>Restore Session?</h2>
+            <p><a href="special://restore">Touch here</a> to restore your previously opened tabs.</p>
+        </div>
+        <div id="FavoritesContainer">
+            <h2>Favorites</h2>
+            <div class="Favorite">
+                <a href="https://vgmoose.com">
+                    <img src="https://vgmoose.com/posts/27164281%20-%20[release]%20Space%20Game%20(for%20Web%20and%20PC,%20Godot%20port).post/space1.png" alt="Home" />
+                    <p>vgmoose.com</p>
+                </a>
+            </div>
+            <div class="Favorite">
+                <a href="https://wikipedia.org">
+                    <img src="https://vgmoose.com/posts/26520908%20-%20[release]%20vgedit%20-%20Text%20Editor%20for%20Video%20Game%20Consoles.post/screen2.png" alt="Bookmarks" />
+                    <p>Wikipedia</p>
+                </a>
+            </div>
+            <div class="Favorite">
+                <a href="https://google.com">
+                    <img src="https://vgmoose.com/posts/27164281%20-%20[release]%20Space%20Game%20(for%20Web%20and%20PC,%20Godot%20port).post/space2.png" alt="History" />
+                    <p>google.com</p>
+                </a>
+            </div>
+            <div class="Favorite">
+                <a href="https://youtube.com">
+                    <img src="https://vgmoose.com/posts/26520908%20-%20[release]%20vgedit%20-%20Text%20Editor%20for%20Video%20Game%20Consoles.post/screen1.png" alt="Settings" />
+                    <p>youtube</p>
+                </a>
+            </div>
+            <div class="Favorite">
+                <a href="">
+                    <img src="https://vgmoose.com/posts/24462737%20-%20[release]%20Homebrew%20App%20Store%20(for%20Wii%20U).post/screenshot.png" alt="About" />
+                    <p>About</p>
+                </a>
+            </div>
+        </div>
+    </body>
+</html>

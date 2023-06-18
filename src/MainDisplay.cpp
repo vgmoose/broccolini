@@ -1,22 +1,49 @@
+#include <iostream>
 #include "MainDisplay.hpp"
 #include "WebView.hpp"
 #include "URLBar.hpp"
+#include <sys/stat.h>
 
 MainDisplay::MainDisplay()
 {
+    // setScreenResolution(1920, 1080);
+
 	RootDisplay::super();
     // backgroundColor = fromRGB(0x3c, 0xb0, 0x43);
 	backgroundColor = fromRGB(0xff, 0xff, 0xff);
+
+    srand(time(NULL));
 
     WebView* webView = new WebView();
 	urlBar = new URLBar(webView);
 
     // TODO: load serialized tabs from disk
     allTabs.push_back(webView);
+
+    // create some directory structures for favorites, history, and cache
+    mkdir("./data", 0777);
+    mkdir("./data/favorites", 0777);
+    mkdir("./data/tabs", 0777);
+    mkdir("./data/cache", 0777);
 }
 
 bool MainDisplay::process(InputEvents* event)
 {
+    bool ret = RootDisplay::process(event);
+    if (ret) return true;
+
+    if (event->quitaction == nullptr) {
+        // set up quit callback to serialize the tabs
+        event->quitaction = [this]() {
+            auto summary = fullSessionSummary();
+            printf("Saving session summary: %s\n", summary.c_str());
+            FILE* f = fopen("./data/user.json", "w");
+            fprintf(f, "%s", summary.c_str());
+            fclose(f);
+            exit(0);
+        };
+    }
+    
 	// keep processing child elements
     this->canUseSelectToExit = true;
 
@@ -24,7 +51,6 @@ bool MainDisplay::process(InputEvents* event)
 
     // if we get a url bar press, don't continue
     if (urlBar->process(event)) {
-        printf("Got url bar press\n");
         return true;
     }
 
@@ -34,11 +60,18 @@ bool MainDisplay::process(InputEvents* event)
         return true;
     }
 
-	return RootDisplay::process(event);
+	return false;
 }
 
 void MainDisplay::render(Element* parent)
 {
+    if (RootDisplay::subscreen)
+	{
+		RootDisplay::subscreen->render(this);
+		this->update();
+		return;
+	}
+
     // render the rest of the subelements (not RootDisplay's render)
 	Element::render(parent);
 
@@ -100,4 +133,36 @@ int MainDisplay::mainLoop()
 	int ret = RootDisplay::mainLoop();
 
 	return ret;
+}
+
+std::string MainDisplay::fullSessionSummary() {
+    std::string ret = "{\n";
+
+    ret += "\t\"views\": [\n";
+
+    // summarize each tab (and its history)
+    for (int i = 0; i < allTabs.size(); i++) {
+        WebView* webView = allTabs[i];
+        ret += webView->fullSessionSummary();
+        ret += ",\n";
+    }
+
+    if (favorites.size() > 0) {
+        // delete two characters (trailing newline and last comma)
+        ret = ret.substr(0, ret.size() - 2);
+        ret += "\n\t],\n";
+        
+        ret += "\t\"favorites\": [\n";
+        for (int i = 0; i < favorites.size(); i++) {
+            ret += "\t\t\"" + favorites[i] + "\",\n";
+        }
+    }
+
+    // delete two characters (trailing newline and last comma)
+    ret = ret.substr(0, ret.size() - 2);
+
+    ret += "\n\t]\n";
+    ret += "}\n";
+
+    return ret;
 }

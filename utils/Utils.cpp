@@ -40,6 +40,7 @@
 #include <map>
 #include <algorithm>
 #include <cstring>
+#include <regex>
 
 #include "Utils.hpp"
 
@@ -445,4 +446,46 @@ std::string base64_decode(const std::string_view in) {
     }
   }
   return out;
+}
+
+
+std::string base64_encode(const std::string_view in) {
+  // table from '+' to 'z'
+  const char lookup[] =
+	  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+  std::string out;
+  out.reserve(((in.size() + 2) / 3) * 4);
+
+  uint32_t val = 0;
+  int32_t valb = -6;
+  for (uint8_t c : in) {
+	val = (val << 8) + c;
+	valb += 8;
+	while (valb >= 0) {
+	  out.push_back(lookup[(val >> valb) & 0x3F]);
+	  valb -= 6;
+	}
+  }
+  if (valb > -6) {
+	out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
+  }
+  while (out.size() % 4) {
+	out.push_back('=');
+  }
+  return out;
+}
+
+std::string just_domain_from_url(const std::string& url)
+{
+	// use regex to grab between protocol and first slash
+	std::regex domain_regex("^(?:https?:\\/\\/)?(?:[^@\\/\\n]+@)?(?:www\\.)?([^:\\/\\n]+)");
+	std::smatch domain_match;
+
+	if (std::regex_search(url, domain_match, domain_regex))
+	{
+		return domain_match[1];
+	}
+
+	return "n/a";
 }

@@ -144,6 +144,7 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
         || strncmp(src, "data:", 5) == 0
         || strncmp(src, "mailto:", 7) == 0
         || strncmp(src, "javascript:", 11) == 0
+        || strncmp(src, "special:", 8) == 0
     ) {
         // this is a https/http/data/mailto/js uri, just use it directly
         ss << src;
@@ -255,14 +256,19 @@ void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<l
             }
         } else {
             // no image, draw a filled rectangle
-            CST_SetDrawColorRGBA(renderer, bg.color.red, bg.color.green, bg.color.blue, 255);
-            CST_FillRect(renderer, &dimens);
+            auto radius = bg.border_radius.top_left_x; // TODO: all corners?
+            CST_roundedBoxRGBA(renderer, dimens.x, dimens.y, dimens.x + dimens.w, dimens.y + dimens.h, radius, bg.color.red, bg.color.green, bg.color.blue, bg.color.alpha);
         }
     }
 
 }
 
 void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders& borders, const litehtml::position& draw_pos, bool root) {
+
+    if (!borders.is_visible()) {
+        // don't draw invisible borders!
+        return;
+    }
 
     CST_Rect dimens = {
         draw_pos.left(),
@@ -277,8 +283,8 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
     auto color = borders.top.color;
 
     auto renderer = RootDisplay::mainDisplay->renderer;
-    CST_SetDrawColorRGBA(renderer, color.red, color.green, color.blue, color.alpha);
-    CST_DrawRect(renderer, &dimens);
+    auto radius = borders.radius.top_left_x; // TODO: all corners?
+    CST_roundedRectangleRGBA(renderer, dimens.x, dimens.y, dimens.x + dimens.w, dimens.y + dimens.h, radius, color.red, color.green, color.blue, color.alpha);
 }
 
 void BrocContainer::set_caption(const char* caption ) {
@@ -354,19 +360,10 @@ std::vector<std::tuple<litehtml::position, litehtml::size>> get_draw_areas(
 	return all_areas;
 }
 
-// struct MyElement {
-//     void* test;
-//     std::list<std::weak_ptr<litehtml::render_item>> m_renders;
-// };
-
 void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el) {
 
     // use a hack to grab the internal render list from the target element
     // TODO: not do this? either fork litehtml or find another way
-
-    // litehtml::element* element_ptr = el.get();
-    // auto m_renders = reinterpret_cast<MyElement*>(element_ptr)->m_renders;
-    // auto draw_areas = get_draw_areas(m_renders);
     auto draw_areas = get_draw_areas(el->m_renders);
 
     if (webView->nextLinkHref == "") {
