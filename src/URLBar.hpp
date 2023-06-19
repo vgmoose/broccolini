@@ -4,8 +4,9 @@
 #include "../libs/chesto/src/EKeyboard.hpp"
 #include "WebView.hpp"
 #include "ClockElement.hpp"
-#include "TabSwitcher.hpp"
 #include <string>
+
+class TabSwitcher;
 
 class URLBar : public Element
 {

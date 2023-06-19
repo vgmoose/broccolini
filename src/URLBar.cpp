@@ -4,6 +4,7 @@
 #include "../libs/chesto/src/TextElement.hpp"
 #include "../libs/chesto/src/Constraint.hpp"
 #include "./MainDisplay.hpp"
+#include "TabSwitcher.hpp"
 
 #define BUTTON_SIZE 50
 
@@ -131,7 +132,8 @@ URLBar::URLBar(WebView* webView)
         if (tabSwitcher == NULL) {
             tabSwitcher = new TabSwitcher();
         }
-        mainDisplay->switchSubscreen(tabSwitcher);
+        tabSwitcher->createTabCards();
+        mainDisplay->subscreen = tabSwitcher;
         
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding));

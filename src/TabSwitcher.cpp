@@ -1,6 +1,7 @@
 #include <sstream>
 #include <iomanip>
 #include "TabSwitcher.hpp"
+#include "URLBar.hpp"
 #include "../utils/Utils.hpp"
 #include "../libs/chesto/src/ImageElement.hpp"
 #include "../libs/chesto/src/Container.hpp"
@@ -15,19 +16,24 @@ TabSwitcher::TabSwitcher()
     hasBackground = true;
     backgroundColor = { 1, 1, 1 };
 
-    this->createTabCards();
+    // this->createTabCards();
 }
 
+
+// Chesto's switchSubscreen will try to free the subscreen, which we don't want,
+// so instead we'll set subscreen manually (and the MainDisplay's process method accounts for this)
 void TabSwitcher::createTabCards() {
     wipeAll(false);
+
+    auto mainDisplay = ((MainDisplay*)RootDisplay::mainDisplay);
 
     // add close button in the top right
     child((new ImageElement(RAMFS "res/icons/x.svg"))
         ->setSize(35, 50)
         ->constrain(ALIGN_RIGHT, 30)
         ->constrain(ALIGN_TOP, 20)
-        ->setAction([this]() {
-            ((MainDisplay*)RootDisplay::mainDisplay)->switchSubscreen(NULL);
+        ->setAction([this, mainDisplay]() {
+            mainDisplay->subscreen = NULL;
         })
         ->setAbsolute(true)
         ->setTouchable(true)
@@ -36,7 +42,7 @@ void TabSwitcher::createTabCards() {
     // TODO: use an actual Grid instead of a Container of Container rows
     Container* currentCon = NULL;
 
-    auto allTabs = ((MainDisplay*)RootDisplay::mainDisplay)->allTabs;
+    auto allTabs = mainDisplay->allTabs;
     auto black = CST_MakeColor(0, 0, 0, 255);
 
     int nextConYPos = -70;
@@ -56,7 +62,20 @@ void TabSwitcher::createTabCards() {
 
         auto card = new Container(COL_LAYOUT, 8);
         card->add(new TextElement(tabName.c_str(), 20, &black));
-        card->add((new ImageElement(tabPath.c_str()))->setSize(275, 155));
+        
+        auto thumbnail = new ImageElement(tabPath.c_str());
+        thumbnail->loadPath(tabPath, true); // force bypass cache, to get fresh thumbnails
+        card->add(thumbnail->setSize(275, 155));
+
+        card->setAction([this, count, mainDisplay]() {
+            mainDisplay->setActiveTab(count);
+            mainDisplay->subscreen = NULL;
+
+            // update the URLBar's current tab
+            auto urlBar = mainDisplay->urlBar;
+            urlBar->webView = mainDisplay->getActiveWebView();
+        });
+        card->setTouchable(true);
 
         currentCon->add(card);
         count++;

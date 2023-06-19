@@ -29,7 +29,10 @@ MainDisplay::MainDisplay()
 
 bool MainDisplay::process(InputEvents* event)
 {
-    bool ret = RootDisplay::process(event);
+    if (RootDisplay::subscreen)
+		return RootDisplay::subscreen->process(event);
+
+    bool ret = Element::process(event);
     if (ret) return true;
 
     if (event->quitaction == nullptr) {

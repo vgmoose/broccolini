@@ -145,6 +145,7 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
         || strncmp(src, "mailto:", 7) == 0
         || strncmp(src, "javascript:", 11) == 0
         || strncmp(src, "special:", 8) == 0
+        || strncmp(src, "localhost", 9) == 0
     ) {
         // this is a https/http/data/mailto/js uri, just use it directly
         ss << src;
@@ -161,7 +162,12 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
             }
         } else {
             // this is a relative url, take the base url
-            ss << this->base_url << "/" << src;
+            ss << this->base_url;
+            // make sure there's a trailing slash
+            if (this->base_url[this->base_url.length() - 1] != '/') {
+                ss << "/";
+            }
+            ss << src;
         }
 
         url = ss.str();

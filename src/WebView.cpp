@@ -135,8 +135,11 @@ std::string sanitize_url(std::string url, bool isHTTPS = false)
     auto protoPos = url.find("://");
     if (protoPos == std::string::npos) {
         // no domain, let's see if we it's likely to be a search query (no dots)
-        if (url.find(".") == std::string::npos) {
-            // no dots, let's assume it's a search query
+        if (
+            url.find(".") == std::string::npos
+            && url.find(":") == std::string::npos
+        ) {
+            // no dots and no colons, let's assume it's a search query
             url = "https://google.com/search?q=" + url;
         } else {
             // no protocol
@@ -173,6 +176,28 @@ void WebView::handle_http_code(int httpCode, std::map<std::string, std::string> 
     }
 }
 
+// takes any number of arguments to swap into the page template
+std::string load_special_page(std::string pageName, ...) {
+    // load one of the stock "special" pages from RAMFS
+    std::string specialPath = RAMFS "res/pages/" + pageName + ".html";
+    std::ifstream t(specialPath);
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    std::string ret = buffer.str();
+
+    // replace ret {1} with the first argument, {2} with the second, etc.
+    va_list args;
+    va_start(args, pageName);
+    int i = 1;
+    while (ret.find("{" + std::to_string(i) + "}") != std::string::npos) {
+        std::string arg = va_arg(args, char*);
+        ret.replace(ret.find("{" + std::to_string(i) + "}"), 3, arg);
+        i++;
+    }
+    va_end(args);
+    return ret;
+}
+
 void WebView::downloadPage()
 {
     // if it's a mailto: link, display a message to open the mail app
@@ -190,23 +215,18 @@ void WebView::downloadPage()
 
     if (isMailto) {
         // TODO: extract all this special protocol detection logic
-        this->contents = "<html><body><br/><br/><br/><h1>Email link Detected</h1><p>Open a mail app to send an email to " + this->url.substr(7) + "</p></body></html>";
+        this->contents = load_special_page("email_link", this->url.substr(7).c_str());
     } else if (isSpecial) {
         // extract the name of the special page
         std::string specialName = this->url.substr(8);
-        // load it from RAMFS
-        std::string specialPath = RAMFS "res/pages/" + specialName + ".html";
-        std::ifstream t(specialPath);
-        std::stringstream buffer;
-        buffer << t.rdbuf();
-        this->contents = buffer.str();
+        this->contents = load_special_page(specialName);
     } else {
         downloadFileToMemory(this->url, &this->contents, &httpCode, &headerResp);
     }
 
     if (redirectCount > 10) {
         std::cout << "Too many redirects, aborting" << std::endl;
-        this->contents = "<html><body><br/><br/><br/><h1>Too many redirects</h1></body></html>";
+        this->contents = load_special_page("too_many_redirects");
     }
     else if (httpCode != 200 && httpCode != 404 && httpCode != 0) {
         handle_http_code(httpCode, headerResp);
