@@ -188,11 +188,18 @@ std::string load_special_page(std::string pageName, ...) {
     // replace ret {1} with the first argument, {2} with the second, etc.
     va_list args;
     va_start(args, pageName);
-    int i = 1;
-    while (ret.find("{" + std::to_string(i) + "}") != std::string::npos) {
-        std::string arg = va_arg(args, char*);
-        ret.replace(ret.find("{" + std::to_string(i) + "}"), 3, arg);
-        i++;
+    for (int x=0; x<10; x++) {
+        // up to 10 arguments supported to replace
+        std::string replaceStr = "{" + std::to_string(x+1) + "}";
+        std::cout << "The X is " << x << " and the replaceStr is " << replaceStr << std::endl;
+        if (ret.find(replaceStr) == std::string::npos) {
+            // slower, but more cautious (make sure tha replaceStr (eg. {1}) is present)
+            // (apparently va_arg is hard to find the end of)
+            break;
+        }
+        std::string replaceWith = va_arg(args, char*);
+        // auto regexReplaceStr = std::regex("(" + replaceStr + ")");
+        ret = myReplace(ret, replaceStr, replaceWith);
     }
     va_end(args);
     return ret;
@@ -200,6 +207,8 @@ std::string load_special_page(std::string pageName, ...) {
 
 void WebView::downloadPage()
 {
+    auto mainDisplay =  ((MainDisplay*)RootDisplay::mainDisplay);
+    
     // if it's a mailto: link, display a message to open the mail app
     bool isMailto = this->url.find("mailto:") == 0;
     bool isSpecial = this->url.find("special:") == 0;
@@ -218,8 +227,26 @@ void WebView::downloadPage()
         this->contents = load_special_page("email_link", this->url.substr(7).c_str());
     } else if (isSpecial) {
         // extract the name of the special page
-        std::string specialName = this->url.substr(8);
-        this->contents = load_special_page(specialName);
+        std::string specialName = this->url.substr(10);
+        if (specialName == "home") {
+            // are we restoring a session?
+            bool prevSession = true; // TODO: actually check for a previous session
+            std::string restoreSession = prevSession ? load_special_page("restore_pane") : "";
+
+            // load info from favorites
+            auto favorites = mainDisplay->favorites;
+            std::string favHtml = "";
+            for (auto favUrl : favorites) {
+                std::string favName = just_domain_from_url(favUrl);
+                std::string favIcon = std::string("file://favorites/") + base64_encode(favUrl) + ".png";
+                favHtml += load_special_page("favorite_card", favUrl.c_str(), favIcon.c_str(), favName.c_str());
+            }
+
+            // actually load the home page using these two html strings and the template
+            this->contents = load_special_page("home", restoreSession.c_str(), favHtml.c_str());
+        } else {
+            this->contents = load_special_page(specialName);
+        }
     } else {
         downloadFileToMemory(this->url, &this->contents, &httpCode, &headerResp);
     }
@@ -268,7 +295,7 @@ void WebView::downloadPage()
         historyIndex = history.size() - 1;
 
         // show the clock
-        auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
+        auto urlBar = mainDisplay->urlBar;
         urlBar->clockButton->hidden = false;
         urlBar->forwardButton->hidden = true;
     }

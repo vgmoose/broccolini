@@ -62,7 +62,7 @@ void TabSwitcher::createTabCards() {
 
         auto card = new Container(COL_LAYOUT, 8);
         card->add(new TextElement(tabName.c_str(), 20, &black));
-        
+
         auto thumbnail = new ImageElement(tabPath.c_str());
         thumbnail->loadPath(tabPath, true); // force bypass cache, to get fresh thumbnails
         card->add(thumbnail->setSize(275, 155));
@@ -80,6 +80,8 @@ void TabSwitcher::createTabCards() {
         currentCon->add(card);
         count++;
     }
+
+    futureRedrawCounter = 2;
 }
 
 bool TabSwitcher::process(InputEvents* event) {

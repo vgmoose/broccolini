@@ -146,6 +146,7 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
         || strncmp(src, "javascript:", 11) == 0
         || strncmp(src, "special:", 8) == 0
         || strncmp(src, "localhost", 9) == 0
+        || strncmp(src, "file://", 7) == 0
     ) {
         // this is a https/http/data/mailto/js uri, just use it directly
         ss << src;
@@ -197,6 +198,12 @@ void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw
         // decode the base64 and load the iamge
         img = new Base64Image(data);
 
+    } else if (srcString.substr(0, 7) == "file://") {
+        // local file, load it from the filesystem
+        auto urlCopy = new std::string(newUrl.c_str());
+        // file URLs are loaded relatively from the data directory (TODO: absolute paths? security implications?)
+        // this is technically in violation of the file:// uri scheme
+        img = new ImageElement(("./data/" + urlCopy->substr(7)).c_str());
     } else {
         // normal url, load it from the network
         // std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;

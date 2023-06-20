@@ -25,6 +25,14 @@ MainDisplay::MainDisplay()
     mkdir("./data/favorites", 0777);
     mkdir("./data/tabs", 0777);
     mkdir("./data/cache", 0777);
+
+    favorites.push_back("https://vgmoose.com");
+    favorites.push_back("https://www.wikipedia.org");
+    favorites.push_back("https://www.google.com/webhp");
+    favorites.push_back("https://serebii.net");
+    favorites.push_back("https://en.wikipedia.org/wiki/Main_Page");
+    favorites.push_back("https://en.wikipedia.org/wiki/Antarctica_(novel)");
+    
 }
 
 bool MainDisplay::process(InputEvents* event)

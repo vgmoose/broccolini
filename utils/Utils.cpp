@@ -489,3 +489,11 @@ std::string just_domain_from_url(const std::string& url)
 
 	return "n/a";
 }
+
+// https://stackoverflow.com/a/56891830/4953343
+std::string myReplace(std::string str, std::string substr1, std::string substr2)
+{
+    for (size_t index = str.find(substr1, 0); index != std::string::npos && substr1.length(); index = str.find(substr1, index + substr2.length() ) )
+        str.replace(index, substr1.length(), substr2);
+    return str;
+}
