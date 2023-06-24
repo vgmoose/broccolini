@@ -52,3 +52,6 @@ std::string base64_decode(const std::string_view encoded_string);
 std::string base64_encode(const std::string_view bytes_to_encode);
 std::string just_domain_from_url(const std::string& url);
 std::string myReplace(std::string str, std::string substr1, std::string substr2);
+bool writeFile(const std::string& path, const std::string& content);
+std::string readFile(const std::string& path);
+void parseJSON(const std::string& json, std::map<std::string, void*>& map);

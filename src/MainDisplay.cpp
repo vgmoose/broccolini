@@ -2,7 +2,9 @@
 #include "MainDisplay.hpp"
 #include "WebView.hpp"
 #include "URLBar.hpp"
+#include "./utils/Utils.hpp"
 #include <sys/stat.h>
+#include <filesystem>
 
 MainDisplay::MainDisplay()
 {
@@ -17,21 +19,36 @@ MainDisplay::MainDisplay()
     WebView* webView = new WebView();
 	urlBar = new URLBar(webView);
 
+    webView->y = urlBar->height;
+    webView->minYScroll = urlBar->height;
+
     // TODO: load serialized tabs from disk
     allTabs.push_back(webView);
+
+    // wipe out all files in the pviews directory if it exists
+    cleanPrivateFiles();
 
     // create some directory structures for favorites, history, and cache
     mkdir("./data", 0777);
     mkdir("./data/favorites", 0777);
-    mkdir("./data/tabs", 0777);
+    mkdir("./data/views", 0777);
+    mkdir("./data/pviews", 0777);
     mkdir("./data/cache", 0777);
 
-    favorites.push_back("https://vgmoose.com");
-    favorites.push_back("https://www.wikipedia.org");
-    favorites.push_back("https://www.google.com/webhp");
-    favorites.push_back("https://serebii.net");
-    favorites.push_back("https://en.wikipedia.org/wiki/Main_Page");
-    favorites.push_back("https://en.wikipedia.org/wiki/Antarctica_(novel)");
+    // parse the favorites from json
+    std::map<std::string, void*> map;
+    parseJSON(readFile("./data/favorites.json"), map);
+
+    // print each key and value in the map
+    for (auto const& x : map) {
+        if (x.first == "favorites") {
+            // our favorites array!
+            std::vector<std::string> favs = *(std::vector<std::string>*)x.second;
+            for (auto const& fav : favs) {
+                favorites.push_back(fav);
+            }
+        }
+    }
     
 }
 
@@ -46,11 +63,9 @@ bool MainDisplay::process(InputEvents* event)
     if (event->quitaction == nullptr) {
         // set up quit callback to serialize the tabs
         event->quitaction = [this]() {
-            auto summary = fullSessionSummary();
-            printf("Saving session summary: %s\n", summary.c_str());
-            FILE* f = fopen("./data/user.json", "w");
-            fprintf(f, "%s", summary.c_str());
-            fclose(f);
+            cleanPrivateFiles();
+            writeFile("./data/views.json", fullSessionSummary());
+            writeFile("./data/favorites.json", favoritesSummary());
             exit(0);
         };
     }
@@ -112,15 +127,20 @@ WebView* MainDisplay::setActiveTab(int index)
 int MainDisplay::createNewTab() {
     // create a new webview, append it to all tabs
     WebView* newTab = new WebView();
-    allTabs.push_back(newTab);
-    return allTabs.size() - 1;
+    newTab->y = urlBar->height;
+    newTab->minYScroll = urlBar->height;
+
+    auto curTabs = getAllTabs();
+    curTabs->push_back(newTab);
+    return curTabs->size() - 1;
 }
 
 WebView* MainDisplay::getActiveWebView() {
-    if (activeTabIndex >= allTabs.size()) {
+    auto curTabs = getAllTabs();
+    if (activeTabIndex >= curTabs->size()) {
         return allTabs[0]; // error handler, should always be here
     }
-    return allTabs[activeTabIndex];
+    return (*curTabs)[activeTabIndex];
 }
 
 int MainDisplay::mainLoop()
@@ -148,7 +168,6 @@ int MainDisplay::mainLoop()
 
 std::string MainDisplay::fullSessionSummary() {
     std::string ret = "{\n";
-
     ret += "\t\"views\": [\n";
 
     // summarize each tab (and its history)
@@ -158,17 +177,6 @@ std::string MainDisplay::fullSessionSummary() {
         ret += ",\n";
     }
 
-    if (favorites.size() > 0) {
-        // delete two characters (trailing newline and last comma)
-        ret = ret.substr(0, ret.size() - 2);
-        ret += "\n\t],\n";
-        
-        ret += "\t\"favorites\": [\n";
-        for (int i = 0; i < favorites.size(); i++) {
-            ret += "\t\t\"" + favorites[i] + "\",\n";
-        }
-    }
-
     // delete two characters (trailing newline and last comma)
     ret = ret.substr(0, ret.size() - 2);
 
@@ -176,4 +184,61 @@ std::string MainDisplay::fullSessionSummary() {
     ret += "}\n";
 
     return ret;
+}
+
+std::string MainDisplay::favoritesSummary() {
+    std::string ret = "{\n";
+    ret += "\t\"favorites\": [\n";
+        
+    bool addedOne = false;
+    for (int i = 0; i < favorites.size(); i++) {
+        ret += "\t\t\"" + favorites[i] + "\",\n";
+        addedOne = true;
+    }
+
+    // delete two characters (trailing newline and last comma)
+    if (addedOne)
+        ret = ret.substr(0, ret.size() - 2);
+
+    ret += "\n\t]\n";
+    ret += "}\n";
+
+    return ret;
+}
+
+std::vector<WebView*>* MainDisplay::getAllTabs() {
+    if (privateMode) {
+        return &privateTabs;
+    }
+    return &allTabs;
+}
+
+void MainDisplay::cleanPrivateFiles() {
+    struct stat info;
+    std::filesystem::path path = "./data/pviews";
+    if (stat(path.c_str(), &info) == 0 && S_ISDIR(info.st_mode)) {
+        // use C++ filesystem to delete all files in the directory
+        for (const auto& entry : std::filesystem::directory_iterator(path)) {
+            std::filesystem::remove(entry.path());
+        }
+    }
+}
+
+void MainDisplay::goToStartPage() {
+    // if our current tabs are empty, make a new one
+    // if one of our tabs is the start page, use it as the active index
+    int newIdx = -1;
+    auto curTabs = *getAllTabs();
+    for (int i = curTabs.size()-1; i >= 0; i--) {
+        WebView* webView = curTabs[i];
+        if (webView->url == START_PAGE) {
+            newIdx = i;
+            break;
+        }
+    }
+    if (newIdx == -1) {
+        // either no tabs, or no start page, so make a new one
+        newIdx = createNewTab();
+    }
+    setActiveTab(newIdx);
 }

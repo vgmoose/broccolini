@@ -15,4 +15,7 @@ public:
 
 	bool process(InputEvents* event);
 	void render(Element* parent);
+
+	Element* closeButton = NULL;
+	Element* privateButton = NULL;
 };

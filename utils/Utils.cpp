@@ -43,6 +43,7 @@
 #include <regex>
 
 #include "Utils.hpp"
+#include "../libs/duktape/src/duktape.h"
 
 
 #define BUF_SIZE 0x800000 //8MB.
@@ -496,4 +497,80 @@ std::string myReplace(std::string str, std::string substr1, std::string substr2)
     for (size_t index = str.find(substr1, 0); index != std::string::npos && substr1.length(); index = str.find(substr1, index + substr2.length() ) )
         str.replace(index, substr1.length(), substr2);
     return str;
+}
+
+bool writeFile(const std::string& path, const std::string& content)
+{
+	std::ofstream file(path);
+	// if (!file.is_open()) {
+	// 	return false;
+	// }
+
+	file << content;
+	file.close();
+
+	return true;
+}
+
+std::string readFile(const std::string& path) {
+	// read the file from the path
+	std::ifstream file(path);
+	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	file.close();
+
+	return content;
+}
+
+// TODO: only handles one key... breaks on a second call of duk_next
+void parseJSON(const std::string& json, std::map<std::string, void*>& map)
+{
+	return; // JSON loading via duktape is broken/flakey, TODO: fix
+
+	printf("The JSON is: %s\n", json.c_str());
+	duk_context *ctx = duk_create_heap_default();
+	duk_push_string(ctx, json.c_str());
+	duk_json_decode(ctx, -1);
+
+	duk_enum(ctx, -1, DUK_ENUM_OWN_PROPERTIES_ONLY);
+
+	duk_next(ctx, -1, 1); // should be in the while loop
+	// while (duk_next(ctx, -1, 1)) {
+		printf("Starting parse\n");
+		// key at index -2, value at index -1
+		if (duk_is_array(ctx, -1)) {
+			// array
+			duk_size_t len = duk_get_length(ctx, -1);
+			std::vector<std::string> arr;
+			for (duk_size_t i = 0; i < len; i++) {
+				duk_get_prop_index(ctx, -1, i);
+				arr.push_back(duk_get_string(ctx, -1));
+				duk_pop(ctx);
+			}
+			map[duk_get_string(ctx, -2)] = new std::vector<std::string>(arr);
+			printf("Parsed an array, first value: %s\n", arr[0].c_str());
+		} else if (duk_is_object(ctx, -1)) {
+			// object
+			std::map<std::string, void*> obj;
+			parseJSON(duk_json_encode(ctx, -1), obj);
+			map[duk_get_string(ctx, -2)] = new std::map<std::string, void*>(obj);
+		} else if (duk_is_string(ctx, -1)) {
+			// string
+			map[duk_get_string(ctx, -2)] = new std::string(duk_get_string(ctx, -1));
+		} else if (duk_is_number(ctx, -1)) {
+			// number
+			map[duk_get_string(ctx, -2)] = new double(duk_get_number(ctx, -1));
+		} else if (duk_is_boolean(ctx, -1)) {
+			// boolean
+			map[duk_get_string(ctx, -2)] = new bool(duk_get_boolean(ctx, -1));
+		} else {
+			// null
+			map[duk_get_string(ctx, -2)] = nullptr;
+		}
+
+		// duk_pop(ctx);
+	// }
+
+	// duk_pop_2(ctx);
+	duk_destroy_heap(ctx);
+	printf("Done parsing JSON\n");
 }

@@ -6,6 +6,8 @@
 #include <map>
 #include <string>
 
+#define START_PAGE "special://home"
+
 // TODO: no forward declare
 class BrocContainer;
 
@@ -43,6 +45,7 @@ public:
     bool needsRender = true;
 
     std::string fullSessionSummary();
-    void screenshotPage();
+    // void screenshotPage();
+    void screenshot(std::string path);
 };
 #endif // WEBVIEW_H

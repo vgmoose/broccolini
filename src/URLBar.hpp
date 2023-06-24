@@ -22,12 +22,14 @@ public:
 
     Element* forwardButton = NULL;
     Element* clockButton = NULL;
+    Element* bookmarkButton = NULL;
+    Element* privateIndicator = NULL;
 
     EKeyboard* keyboard = NULL;
 
     void showKeyboard();
     void resetBar();
-    void saveCurTabScreenshot();
+    void saveCurTabScreenshot(bool isPrivate = false);
 
     bool process(InputEvents* event);
     void render(Element* parent);

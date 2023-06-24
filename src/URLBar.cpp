@@ -38,9 +38,12 @@ Element* makeURLBarButton(const char* iconPath, std::function<bool()> action) {
 }
 
 void URLBar::resetBar() {
+    // update the webview that the urlbar points to
+    this->webView = ((MainDisplay*)RootDisplay::mainDisplay)->getActiveWebView();
+
     // reload the url text, bring to the front, and update the clock/forward state
     urlText->setText(webView->url.c_str());
-    urlText->update();
+    urlText->update(true);
 
     // if we're at the end of the history, show the clock
     if (webView->historyIndex >= webView->history.size() - 1) {
@@ -60,6 +63,8 @@ URLBar::URLBar(WebView* webView)
     this->height = 75;
 
     this->isAbsolute = true;
+
+    auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
 
     CST_Color gray = { 80, 80, 80, 0xff };
 
@@ -111,22 +116,17 @@ URLBar::URLBar(WebView* webView)
         ->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding);
     child(clockButton);
 
-    child(makeURLBarButton(RAMFS "res/icons/add.svg", [this]() {
+    child(makeURLBarButton(RAMFS "res/icons/add.svg", [this, mainDisplay]() {
         // create a new webview
-        saveCurTabScreenshot();
-        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+        saveCurTabScreenshot(mainDisplay->privateMode);
         int idx = mainDisplay->createNewTab();
         this->webView = mainDisplay->setActiveTab(idx);
         this->resetBar();
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding/3 + btnAndPadding + 1));
 
-    child(makeURLBarButton(RAMFS "res/icons/tabs.svg", [this]() {
-        // temporary: just go to the next tab
-        saveCurTabScreenshot();
-        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-        // this->webView = mainDisplay->setActiveTab((mainDisplay->activeTabIndex + 1) % mainDisplay->allTabs.size());
-        // this->resetBar();
+    child(makeURLBarButton(RAMFS "res/icons/tabs.svg", [this, mainDisplay]() {
+        saveCurTabScreenshot(mainDisplay->privateMode);
 
         // set up the new tab screen 
         if (tabSwitcher == NULL) {
@@ -134,6 +134,7 @@ URLBar::URLBar(WebView* webView)
         }
         tabSwitcher->createTabCards();
         mainDisplay->subscreen = tabSwitcher;
+        this->resetBar();
         
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding));
@@ -141,16 +142,29 @@ URLBar::URLBar(WebView* webView)
     
     // add bookmark and refresh buttons within the url text
     // TODO: actually put these in the bar, instead of just being normal buttons
-    child(makeURLBarButton(RAMFS "res/icons/star.svg", [this]() {
+    bookmarkButton = makeURLBarButton(RAMFS "res/icons/star.svg", [this, mainDisplay]() {
         auto webView = this->webView;
-        // take a screen shot of the current view 
+        // take a screen shot of the current view
         auto favThumbPath = "./data/favorites/" + base64_encode(webView->url) + ".png";
         webView->screenshot(favThumbPath);
         // add the url to the favorites list
-        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
         mainDisplay->favorites.push_back(webView->url);
         return true;
-    })->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding*2 + 10));
+    })->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding*2 + 10);
+    child(bookmarkButton);
+
+    privateIndicator = makeURLBarButton(RAMFS "res/icons/private.svg", [this, mainDisplay]() {
+        // exit the private mode, and make a new tab
+        // we need a screen shot before leaving
+        saveCurTabScreenshot(true);
+        mainDisplay->privateMode = false;
+        mainDisplay->goToStartPage();
+        this->updateInfo();
+        this->resetBar();
+        return true;
+    })->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding*2 + 10);
+    privateIndicator->hidden = true;
+    child(privateIndicator);
 
     child(makeURLBarButton(RAMFS "res/icons/refresh.svg", [this]() {
         auto webView = this->webView;
@@ -161,15 +175,28 @@ URLBar::URLBar(WebView* webView)
 }
 
 void URLBar::updateInfo() {
+    auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+
+    privateIndicator->hidden = true;
+    bookmarkButton->hidden = false;
+    CST_Color color = { 80, 80, 80, 0xff };
+
+    if (mainDisplay->privateMode) {
+        privateIndicator->hidden = false;
+        bookmarkButton->hidden = true;
+        color = { 255, 255, 255, 0xff };
+    }
+
+    urlText->setColor(color);
     urlText->setText(webView->url);
-    urlText->update();
+    urlText->update(true);
 }
 
 void URLBar::showKeyboard() {
 
     // TODO: allow text selection and editing, not just wipe
     this->urlText->setText("");
-    this->urlText->update();
+    this->urlText->update(true);
 
     if (keyboard != NULL) {
         // just show the existing keyboard
@@ -187,7 +214,7 @@ void URLBar::showKeyboard() {
             // backspace
             if (this->urlText->text.length() <= 0) return;
             this->urlText->setText(this->urlText->text.substr(0, this->urlText->text.length() - 1));
-            this->urlText->update();
+            this->urlText->update(true);
             return;
         }
         if (text == '\n') {
@@ -198,7 +225,7 @@ void URLBar::showKeyboard() {
             return;
         }
         this->urlText->setText(this->urlText->text + text);
-        this->urlText->update();
+        this->urlText->update(true);
     };
 }
 
@@ -238,21 +265,35 @@ bool URLBar::process(InputEvents* event) {
 
 void URLBar::render(Element* parent) {
     // Draw background
+    auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
 
     CST_Rect rect = { 0, 0, width, height };
     CST_SetDrawColorRGBA(RootDisplay::renderer, 0xdd, 0xdd, 0xdd, 0xff);
+    // if (mainDisplay->privateMode)
+    //     CST_SetDrawColorRGBA(RootDisplay::renderer, 0xbb, 0xbb, 0xbb, 0xff);
     CST_FillRect(RootDisplay::renderer, &rect);
 
     auto innerWidth = width * 0.8;
     auto innerHeight = height * 0.75;
-
-    CST_roundedBoxRGBA(
-        RootDisplay::renderer,
-        width/2 -  innerWidth/2,
-        height/2 - innerHeight/2,
-        width/2 +  innerWidth/2,
-        height/2 + innerHeight/2,
-        15, 0xee, 0xee, 0xee, 0xff);
+    
+    if (mainDisplay->privateMode) {
+        auto darkInnerWidth = innerWidth * 0.85;
+        CST_roundedBoxRGBA(
+            RootDisplay::renderer,
+            width/2 -  darkInnerWidth/2,
+            height/2 - innerHeight/2,
+            width/2 +  darkInnerWidth/2,
+            height/2 + innerHeight/2,
+            15, 0x66, 0x66, 0x66, 0xff);
+    } else {
+        CST_roundedBoxRGBA(
+            RootDisplay::renderer,
+            width/2 -  innerWidth/2,
+            height/2 - innerHeight/2,
+            width/2 +  innerWidth/2,
+            height/2 + innerHeight/2,
+            15, 0xee, 0xee, 0xee, 0xff);
+    }
     
     if (highlightingKeyboard) {
         CST_roundedBoxRGBA(
@@ -275,7 +316,9 @@ void URLBar::render(Element* parent) {
     Element::render(parent);
 }
 
-void URLBar::saveCurTabScreenshot() {
-    auto screenshotPath = "./data/tabs/" + webView->id + ".png";
+void URLBar::saveCurTabScreenshot(bool isPrivate) {
+    auto webView = ((MainDisplay*)RootDisplay::mainDisplay)->getActiveWebView();
+    std::string viewFolder = isPrivate ? "pviews" : "views";
+    auto screenshotPath = "./data/" + viewFolder + "/" + webView->id + ".png";
     webView->screenshot(screenshotPath);
 }

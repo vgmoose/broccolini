@@ -15,7 +15,7 @@
 
 WebView::WebView()
 {
-    this->url = "special://home";
+    this->url = START_PAGE;
     needsLoad = true;
 
     this->width = RootDisplay::screenWidth;
@@ -91,7 +91,7 @@ void WebView::render(Element *parent)
     }
 
     if (container != nullptr) {
-        litehtml::position posObj = litehtml::position(0, 0, RootDisplay::screenWidth, RootDisplay::screenHeight);
+        litehtml::position posObj = litehtml::position(0, 0, this->width, this->height);
         this->m_doc->draw(
             (litehtml::uint_ptr)container,
             this->x, this->y, &posObj
@@ -198,7 +198,6 @@ std::string load_special_page(std::string pageName, ...) {
             break;
         }
         std::string replaceWith = va_arg(args, char*);
-        // auto regexReplaceStr = std::regex("(" + replaceStr + ")");
         ret = myReplace(ret, replaceStr, replaceWith);
     }
     va_end(args);
@@ -232,6 +231,9 @@ void WebView::downloadPage()
             // are we restoring a session?
             bool prevSession = true; // TODO: actually check for a previous session
             std::string restoreSession = prevSession ? load_special_page("restore_pane") : "";
+            if (mainDisplay->privateMode) {
+                restoreSession = load_special_page("private");
+            }
 
             // load info from favorites
             auto favorites = mainDisplay->favorites;
@@ -240,6 +242,10 @@ void WebView::downloadPage()
                 std::string favName = just_domain_from_url(favUrl);
                 std::string favIcon = std::string("file://favorites/") + base64_encode(favUrl) + ".png";
                 favHtml += load_special_page("favorite_card", favUrl.c_str(), favIcon.c_str(), favName.c_str());
+            }
+
+            if (favHtml == "") {
+                favHtml = "You have no favorites yet! Use the star button to add one.";
             }
 
             // actually load the home page using these two html strings and the template
@@ -255,7 +261,7 @@ void WebView::downloadPage()
         std::cout << "Too many redirects, aborting" << std::endl;
         this->contents = load_special_page("too_many_redirects");
     }
-    else if (httpCode != 200 && httpCode != 404 && httpCode != 0) {
+    else if (httpCode != 200 && httpCode != 404 && httpCode != 403 && httpCode != 0) {
         handle_http_code(httpCode, headerResp);
         return;
     }
@@ -299,7 +305,14 @@ void WebView::downloadPage()
         urlBar->clockButton->hidden = false;
         urlBar->forwardButton->hidden = true;
     }
+}
 
+void WebView::screenshot(std::string path) {
+    // offset by our top bound (such as a URL bar) before taking screenshot
+    int origY = this->y;
+    this->y -= this->minYScroll;
+    Element::screenshot(path);
+    this->y = origY;
 }
 
 std::string WebView::fullSessionSummary() {
@@ -307,11 +320,14 @@ std::string WebView::fullSessionSummary() {
     summary += "\t\t\t\"id\": \"" + id + "\",\n";
     summary += "\t\t\t\"urlIndex\": " + std::to_string(historyIndex) + ",\n";
     summary += "\t\t\t\"urls\": \[\n";
+    bool addedOne = false;
     for (auto url : history) {
         summary += "\t\t\t\t\"" + url + "\",\n";
+        addedOne = true;
     }
     // remove the last comma
-    summary = summary.substr(0, summary.size() - 2);
+    if (addedOne)
+        summary = summary.substr(0, summary.size() - 2);
     summary += "\n\t\t\t]\n\t\t}";
     return summary;
 }
