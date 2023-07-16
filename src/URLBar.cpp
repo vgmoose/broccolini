@@ -268,9 +268,8 @@ void URLBar::render(Element* parent) {
     auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
 
     CST_Rect rect = { 0, 0, width, height };
-    CST_SetDrawColorRGBA(RootDisplay::renderer, 0xdd, 0xdd, 0xdd, 0xff);
-    // if (mainDisplay->privateMode)
-    //     CST_SetDrawColorRGBA(RootDisplay::renderer, 0xbb, 0xbb, 0xbb, 0xff);
+    auto theme_color = mainDisplay->theme_color;
+    CST_SetDrawColorRGBA(RootDisplay::renderer, theme_color.r, theme_color.g, theme_color.b, 0xff);
     CST_FillRect(RootDisplay::renderer, &rect);
 
     auto innerWidth = width * 0.8;
@@ -291,8 +290,10 @@ void URLBar::render(Element* parent) {
             width/2 -  innerWidth/2,
             height/2 - innerHeight/2,
             width/2 +  innerWidth/2,
-            height/2 + innerHeight/2,
-            15, 0xee, 0xee, 0xee, 0xff);
+            height/2 + innerHeight/2, 15,
+            fmin(theme_color.r + 0x11, 0xff),
+            fmin(theme_color.g + 0x11, 0xff),
+            fmin(theme_color.b + 0x11, 0xff), 0xff);
     }
     
     if (highlightingKeyboard) {

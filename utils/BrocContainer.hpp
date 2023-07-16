@@ -1,5 +1,6 @@
 // hack from http://bloglitb.blogspot.com/2010/07/access-to-private-members-thats-easy.html?showComment=1295796252322#c5854041234530206755 to access private members of litehtml
 // TODO: either fork litehtml or submit a PR to not have to do this
+#include <sstream>
 #define private public
 #define protected public
 #include <litehtml.h>

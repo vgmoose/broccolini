@@ -1,5 +1,18 @@
+# build/env files
 *.o
 *.bin
 .vscode/*
 *.DS_Store
+
+# user data
 data/*
+
+# homebrew-related files
+*.nro
+*.nacp
+*.pfs0
+*.elf
+*.rpx
+*.wuhb
+*.nso
+build_*

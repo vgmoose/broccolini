@@ -2,13 +2,20 @@ BINARY      := broccolini
 
 APP_TITLE	:= broccolini
 APP_AUTHOR 	:= vgmoose
+APP_VERSION := 0.1
+
+DEBUG_BUILD := 1
 
 SOURCES		+=	. libs/litehtml/src libs/litehtml/src/gumbo libs/duktape/src src utils
-CFLAGS		+= -g -DUSE_KEYBOARD -DNETWORK -Ilibs/litehtml/include  -Ilibs/litehtml/include/litehtml -Ilibs/litehtml/src/gumbo/include -Ilibs/litehtml/src/gumbo/include/gumbo -Ilibs/duktape/src/
+CFLAGS		+= -g -DUSE_KEYBOARD -DNETWORK
+
+CFLAGS		+= -I$(TOPDIR)/libs/litehtml/include -I$(TOPDIR)/libs/litehtml/include/litehtml
+CFLAGS		+= -I$(TOPDIR)/libs/litehtml/src/gumbo/include -I$(TOPDIR)/libs/litehtml/src/gumbo/include/gumbo
+CFLAGS		+= -I$(TOPDIR)/libs/duktape/src/
+
 LDFLAGS     += -lcurl
 
 SOURCES += $(CHESTO_DIR)/libs/SDL_FontCache
 VPATH   += $(CHESTO_DIR)/libs/SDL_FontCache
-
 
 include libs/chesto/Makefile

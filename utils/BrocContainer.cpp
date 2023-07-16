@@ -1,6 +1,6 @@
 #include "BrocContainer.hpp"
-#include "NetImageElement.hpp"
-#include "ImageElement.hpp"
+#include "../libs/chesto/src/NetImageElement.hpp"
+#include "../libs/chesto/src/ImageElement.hpp"
 #include "../src/Base64Image.hpp"
 #include "../src/MainDisplay.hpp"
 #include "../src/URLBar.hpp"
@@ -441,6 +441,27 @@ void BrocContainer::get_client_rect(litehtml::position& client ) const {
 
 std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
     // std::cout << "Requested to create an element: " << tag_name << std::endl;
+
+    if (std::string(tag_name) == "meta" && attributes.count("name") > 0) {
+        printf("Found meta tag\n");
+        std::string name = attributes.at("name");
+        if (name == "theme-color" && attributes.count("content") > 0) {
+            printf("Found theme-color meta tag\n");
+            auto content = attributes.at("content");
+            // convert the hex color to a chesto color
+            auto web_color = litehtml::web_color::from_string(content, NULL);
+            CST_Color chesto_color = {
+                web_color.red,
+                web_color.green,
+                web_color.blue,
+                web_color.alpha
+            };
+            // set the theme color
+            auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+            mainDisplay->theme_color = chesto_color;
+            printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
+        }
+    }
 
     // if (strcmp(tag_name, "a") == 0) {
     //     // std::cout << "Creating an image element" << std::endl;

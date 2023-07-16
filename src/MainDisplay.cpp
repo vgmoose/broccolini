@@ -2,7 +2,7 @@
 #include "MainDisplay.hpp"
 #include "WebView.hpp"
 #include "URLBar.hpp"
-#include "./utils/Utils.hpp"
+#include "../utils/Utils.hpp"
 #include <sys/stat.h>
 #include <filesystem>
 

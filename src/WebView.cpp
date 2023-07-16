@@ -11,7 +11,6 @@
 #include <regex>
 #include <iterator>
 #include <fstream>
-#include <sstream>
 
 WebView::WebView()
 {
@@ -287,6 +286,9 @@ void WebView::downloadPage()
         // TODO: crashes, deletes too early, but do this instead
         prevContainer = container;
     }
+
+    // reset the theme color
+    mainDisplay->theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
 
     container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());
