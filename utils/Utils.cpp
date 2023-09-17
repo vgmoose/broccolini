@@ -36,8 +36,9 @@
 #include <cstring>
 #include <regex>
 
+#include "../libs/json/single_include/nlohmann/json.hpp"
+
 #include "Utils.hpp"
-#include "../libs/duktape/src/duktape.h"
 
 // resinfs support, if present
 #if defined(USE_RAMFS)
@@ -512,56 +513,41 @@ std::string readFile(const std::string& path) {
 	return content;
 }
 
-// TODO: only handles one key... breaks on a second call of duk_next
 void parseJSON(const std::string& json, std::map<std::string, void*>& map)
 {
-	return; // JSON loading via duktape is broken/flakey, TODO: fix
+	// use nlohmann json to parse the json
+	auto data = nlohmann::json::parse(json);
 
-	printf("The JSON is: %s\n", json.c_str());
-	duk_context *ctx = duk_create_heap_default();
-	duk_push_string(ctx, json.c_str());
-	duk_json_decode(ctx, -1);
+	// iterate through each key in the json
+	for (auto it = data.begin(); it != data.end(); ++it) {
+		// get the key and value
+		std::string key = it.key();
+		auto value = it.value();
 
-	duk_enum(ctx, -1, DUK_ENUM_OWN_PROPERTIES_ONLY);
-
-	duk_next(ctx, -1, 1); // should be in the while loop
-	// while (duk_next(ctx, -1, 1)) {
-		printf("Starting parse\n");
-		// key at index -2, value at index -1
-		if (duk_is_array(ctx, -1)) {
-			// array
-			duk_size_t len = duk_get_length(ctx, -1);
-			std::vector<std::string> arr;
-			for (duk_size_t i = 0; i < len; i++) {
-				duk_get_prop_index(ctx, -1, i);
-				arr.push_back(duk_get_string(ctx, -1));
-				duk_pop(ctx);
-			}
-			map[duk_get_string(ctx, -2)] = new std::vector<std::string>(arr);
-			printf("Parsed an array, first value: %s\n", arr[0].c_str());
-		} else if (duk_is_object(ctx, -1)) {
-			// object
-			std::map<std::string, void*> obj;
-			parseJSON(duk_json_encode(ctx, -1), obj);
-			map[duk_get_string(ctx, -2)] = new std::map<std::string, void*>(obj);
-		} else if (duk_is_string(ctx, -1)) {
-			// string
-			map[duk_get_string(ctx, -2)] = new std::string(duk_get_string(ctx, -1));
-		} else if (duk_is_number(ctx, -1)) {
-			// number
-			map[duk_get_string(ctx, -2)] = new double(duk_get_number(ctx, -1));
-		} else if (duk_is_boolean(ctx, -1)) {
-			// boolean
-			map[duk_get_string(ctx, -2)] = new bool(duk_get_boolean(ctx, -1));
-		} else {
-			// null
-			map[duk_get_string(ctx, -2)] = nullptr;
+		// check the type of the value
+		if (value.is_string()) {
+			// string, add to map
+			map[key] = new std::string(value);
 		}
-
-		// duk_pop(ctx);
-	// }
-
-	// duk_pop_2(ctx);
-	duk_destroy_heap(ctx);
-	printf("Done parsing JSON\n");
+		else if (value.is_number()) {
+			// number, add to map
+			map[key] = new int(value);
+		}
+		else if (value.is_boolean()) {
+			// boolean, add to map
+			map[key] = new bool(value);
+		}
+		else if (value.is_array()) {
+			// array, add to map
+			map[key] = new std::vector<std::string>();
+			for (auto& element : value) {
+				((std::vector<std::string>*)map[key])->push_back(element);
+			}
+		}
+		else if (value.is_object()) {
+			// object, add to map (recursively)
+			map[key] = new std::map<std::string, void*>();
+			parseJSON(value.dump(), *(std::map<std::string, void*>*)map[key]);
+		}
+	}
 }

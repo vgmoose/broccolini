@@ -15,7 +15,4 @@ CFLAGS		+= -I$(TOPDIR)/libs/duktape/src/
 
 LDFLAGS     += -lcurl
 
-SOURCES += $(CHESTO_DIR)/libs/SDL_FontCache
-VPATH   += $(CHESTO_DIR)/libs/SDL_FontCache
-
 include libs/chesto/Makefile

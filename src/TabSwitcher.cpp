@@ -145,10 +145,10 @@ void TabSwitcher::render(Element* parent) {
     auto mainDisplay = ((MainDisplay*)RootDisplay::mainDisplay);
 
     // draw a white bg (TODO: use chesto methods / debug why hasBackground wasn't enough)
-    SDL_SetRenderDrawColor(RootDisplay::renderer, 255, 255, 255, 255);
+    CST_SetDrawColorRGBA(RootDisplay::renderer, 255, 255, 255, 255);
     if (mainDisplay->privateMode)
-        SDL_SetRenderDrawColor(RootDisplay::renderer, 0x66, 0x66, 0x66, 255);
-    SDL_RenderFillRect(RootDisplay::renderer, NULL);
+        CST_SetDrawColorRGBA(RootDisplay::renderer, 0x66, 0x66, 0x66, 255);
+    CST_FillRect(RootDisplay::renderer, NULL);
 
     ListElement::render(parent);
 

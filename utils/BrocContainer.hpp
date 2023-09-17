@@ -20,7 +20,7 @@ public:
     int eternalCounter = 0; // used for some incremental ids
 
     // create a map to store all fonts on the page
-    std::map<litehtml::uint_ptr, FC_Font*> fontCache;
+    std::map<litehtml::uint_ptr, CST_Font*> fontCache;
 
     // create a map to store all images on the page
     std::map<std::string, Texture*> imageCache;

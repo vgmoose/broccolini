@@ -38,4 +38,6 @@ public:
 
 	std::string fullSessionSummary();
 	std::string favoritesSummary();
+
+	void restoreTabs();
 };

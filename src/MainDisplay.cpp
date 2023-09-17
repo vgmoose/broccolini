@@ -49,7 +49,6 @@ MainDisplay::MainDisplay()
             }
         }
     }
-    
 }
 
 bool MainDisplay::process(InputEvents* event)
@@ -241,4 +240,29 @@ void MainDisplay::goToStartPage() {
         newIdx = createNewTab();
     }
     setActiveTab(newIdx);
+}
+
+void MainDisplay::restoreTabs() {
+    // re-add the previously opened tabs as webviews
+    std::map<std::string, void*> map;
+    parseJSON(readFile("./data/views.json"), map);
+
+    auto curTabs = getAllTabs();
+
+    // print each key and value in the map
+    for (auto const& x : map) {
+        if (x.first == "views") {
+            auto views = *(std::vector<std::map<std::string, void*>>*)x.second;
+            for (auto const& view : views) {
+                auto newView = new WebView();
+                // auto idStr = *(std::string*)view["id"];
+                // auto urlIndex = *(int*)view["urlIndex"];
+                // auto urls = *(std::vector<std::string>*)view["urls"];
+                // newView->id = idStr;
+                // newView->historyIndex = urlIndex;
+                // newView->history = urls.copy();
+                curTabs->push_back(newView);
+            }
+        }
+    }
 }
