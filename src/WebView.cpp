@@ -265,6 +265,15 @@ void WebView::downloadPage()
         return;
     }
 
+    // check for image mime type and use the image container template
+    auto contentType = headerResp["content-type"];
+    if (contentType.find("image/") == 0) {
+        // convert contents to base64 image url
+        std::string base64Contents = base64_encode(this->contents);
+        base64Contents = "data:" + contentType + ";base64," + base64Contents;
+        this->contents = load_special_page("image_container", base64Contents.c_str());
+    }
+
     // std::cout << "Contents: " << this->contents << std::endl;
 
     // litehtml::context ctx;
