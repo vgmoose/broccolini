@@ -309,7 +309,7 @@ void URLBar::render(Element* parent) {
     // Draw background
     auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
     
-    CST_Rect rect = { 0, 0, width, height };
+    CST_Rect rect = { x, y, x + width, y + height };
 
     auto theme_color = getThemeColor();
 
@@ -323,18 +323,18 @@ void URLBar::render(Element* parent) {
         auto darkInnerWidth = innerWidth * 0.85;
         CST_roundedBoxRGBA(
             RootDisplay::renderer,
-            width/2 -  darkInnerWidth/2,
-            height/2 - innerHeight/2,
-            width/2 +  darkInnerWidth/2,
-            height/2 + innerHeight/2,
+            x + width/2 -  darkInnerWidth/2,
+            y + height/2 - innerHeight/2,
+            x + width/2 +  darkInnerWidth/2,
+            y + height/2 + innerHeight/2,
             15, 0x66, 0x66, 0x66, 0xff);
     } else {
         CST_roundedBoxRGBA(
             RootDisplay::renderer,
-            width/2 -  innerWidth/2,
-            height/2 - innerHeight/2,
-            width/2 +  innerWidth/2,
-            height/2 + innerHeight/2, 15,
+            x + width/2 -  innerWidth/2,
+            y + height/2 - innerHeight/2,
+            x + width/2 +  innerWidth/2,
+            y + height/2 + innerHeight/2, 15,
             fmin(theme_color.r + 0x11, 0xff),
             fmin(theme_color.g + 0x11, 0xff),
             fmin(theme_color.b + 0x11, 0xff), 0xff);
@@ -388,9 +388,15 @@ void URLBar::updateVisibleUrlText() {
     }
 }
 
+std::string URLBar::getCurTabScreenshotPath() {
+    auto webView = ((MainDisplay*)RootDisplay::mainDisplay)->getActiveWebView();
+    std::string viewFolder = ((MainDisplay*)RootDisplay::mainDisplay)->privateMode ? "pviews" : "views";
+    auto screenshotPath = "./data/" + viewFolder + "/" + webView->id + ".png";
+    return screenshotPath;
+}
+
 void URLBar::saveCurTabScreenshot(bool isPrivate) {
     auto webView = ((MainDisplay*)RootDisplay::mainDisplay)->getActiveWebView();
-    std::string viewFolder = isPrivate ? "pviews" : "views";
-    auto screenshotPath = "./data/" + viewFolder + "/" + webView->id + ".png";
+    auto screenshotPath = getCurTabScreenshotPath();
     webView->screenshot(screenshotPath);
 }

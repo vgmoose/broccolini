@@ -12,6 +12,7 @@ class TabSwitcher : public ListElement
 public:
 	TabSwitcher();
     void createTabCards();
+	void close(std::string path = "", Element* card = NULL);
 
 	bool process(InputEvents* event);
 	void render(Element* parent);

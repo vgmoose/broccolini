@@ -34,6 +34,7 @@ public:
     void resetBar();
     void updateVisibleUrlText();
     void updateIconMaskColors(bool fillWhite);
+    std::string getCurTabScreenshotPath();
     void saveCurTabScreenshot(bool isPrivate = false);
     void createURLBarElements();
     Element* makeURLBarButton(std::string iconPath, std::function<bool()> action);
