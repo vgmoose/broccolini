@@ -5,6 +5,7 @@
 #include "../libs/chesto/src/Constraint.hpp"
 #include "./MainDisplay.hpp"
 #include "TabSwitcher.hpp"
+#include "../utils/UIUtils.hpp"
 
 #define BUTTON_SIZE 50
 
@@ -16,7 +17,7 @@ void printHistory(WebView* webView) {
     printf("=========\n");
 }
 
-Element* makeURLBarButton(const char* iconPath, std::function<bool()> action) {
+Element* URLBar::makeURLBarButton(std::string iconPath, std::function<bool()> action) {
     int iconSize = 30;
     Element* base = (new Element())
         ->setTouchable(true)
@@ -26,7 +27,7 @@ Element* makeURLBarButton(const char* iconPath, std::function<bool()> action) {
     base->height = BUTTON_SIZE;
 
     base->child(
-        (new ImageElement(iconPath))
+        createThemedIcon(iconPath + (themeIsTooDark ? "-light" : ""))
         ->setSize(iconSize, iconSize)
         ->centerIn(base)
     );
@@ -42,8 +43,8 @@ void URLBar::resetBar() {
     this->webView = ((MainDisplay*)RootDisplay::mainDisplay)->getActiveWebView();
 
     // reload the url text, bring to the front, and update the clock/forward state
-    urlText->setText(webView->url.c_str());
-    urlText->update(true);
+    currentUrl = webView->url.c_str();
+    this->updateVisibleUrlText();
 
     // if we're at the end of the history, show the clock
     if (webView->historyIndex >= webView->history.size() - 1) {
@@ -64,6 +65,13 @@ URLBar::URLBar(WebView* webView)
 
     this->isAbsolute = true;
 
+    createURLBarElements();
+}
+
+void URLBar::createURLBarElements() {
+    removeAll(true);
+    keyboard = NULL;
+
     auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
 
     CST_Color gray = { 80, 80, 80, 0xff };
@@ -72,12 +80,13 @@ URLBar::URLBar(WebView* webView)
     urlText->constrain(ALIGN_CENTER_HORIZONTAL, 0);
     urlText->constrain(ALIGN_CENTER_VERTICAL, 0);
     child(urlText);
+    this->updateVisibleUrlText();
 
     auto innerWidth = width * 0.8; // TODO: make a variable somewhere
     int btnAndPadding = BUTTON_SIZE + 10;
     int sidePadding = 14;
 
-    child(makeURLBarButton(RAMFS "res/icons/back.svg", [this]() {
+    child(makeURLBarButton("back", [this]() {
         auto webView = this->webView;
         webView->historyIndex --;
         if (webView->historyIndex < 0) {
@@ -92,7 +101,7 @@ URLBar::URLBar(WebView* webView)
         return true;
     })->constrain(ALIGN_LEFT, sidePadding - 1));
 
-    forwardButton = makeURLBarButton(RAMFS "res/icons/forward.svg", [this]() {
+    forwardButton = makeURLBarButton("forward", [this]() {
         auto webView = this->webView;
         // printf("-------\n");
         // printHistory(webView);
@@ -111,12 +120,17 @@ URLBar::URLBar(WebView* webView)
     forwardButton->hidden = true;
     child(forwardButton);
 
-    clockButton = (new ClockElement())
+    bool use12HourClock = true;
+    if (clockButton != NULL) {
+        use12HourClock = ((ClockElement*)clockButton)->is12Hour;
+    }
+
+    clockButton = (new ClockElement(themeIsTooDark, use12HourClock))
         ->constrain(ALIGN_CENTER_VERTICAL, 0)
         ->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding);
     child(clockButton);
 
-    child(makeURLBarButton(RAMFS "res/icons/add.svg", [this, mainDisplay]() {
+    child(makeURLBarButton("add", [this, mainDisplay]() {
         // create a new webview
         saveCurTabScreenshot(mainDisplay->privateMode);
         int idx = mainDisplay->createNewTab();
@@ -125,7 +139,7 @@ URLBar::URLBar(WebView* webView)
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding/3 + btnAndPadding + 1));
 
-    child(makeURLBarButton(RAMFS "res/icons/tabs.svg", [this, mainDisplay]() {
+    child(makeURLBarButton("tabs", [this, mainDisplay]() {
         saveCurTabScreenshot(mainDisplay->privateMode);
 
         // set up the new tab screen 
@@ -142,7 +156,7 @@ URLBar::URLBar(WebView* webView)
     
     // add bookmark and refresh buttons within the url text
     // TODO: actually put these in the bar, instead of just being normal buttons
-    bookmarkButton = makeURLBarButton(RAMFS "res/icons/star.svg", [this, mainDisplay]() {
+    bookmarkButton = makeURLBarButton("star", [this, mainDisplay]() {
         auto webView = this->webView;
         // take a screen shot of the current view
         auto favThumbPath = "./data/favorites/" + base64_encode(webView->url) + ".png";
@@ -153,7 +167,7 @@ URLBar::URLBar(WebView* webView)
     })->constrain(ALIGN_LEFT, sidePadding/3 + btnAndPadding*2 + 10);
     child(bookmarkButton);
 
-    privateIndicator = makeURLBarButton(RAMFS "res/icons/private.svg", [this, mainDisplay]() {
+    privateIndicator = makeURLBarButton("private", [this, mainDisplay]() {
         // exit the private mode, and make a new tab
         // we need a screen shot before leaving
         saveCurTabScreenshot(true);
@@ -166,12 +180,11 @@ URLBar::URLBar(WebView* webView)
     privateIndicator->hidden = true;
     child(privateIndicator);
 
-    child(makeURLBarButton(RAMFS "res/icons/refresh.svg", [this]() {
+    child(makeURLBarButton("refresh", [this]() {
         auto webView = this->webView;
         webView->needsLoad = true;
         return true;
     })->constrain(ALIGN_RIGHT, sidePadding/3 + btnAndPadding*2 + 10));
-
 }
 
 void URLBar::updateInfo() {
@@ -187,16 +200,21 @@ void URLBar::updateInfo() {
         color = { 255, 255, 255, 0xff };
     }
 
+    getThemeColor();
+
+    if (themeIsTooDark) {
+        color = { 255, 255, 255, 0xff };
+    }
+
     urlText->setColor(color);
-    urlText->setText(webView->url);
-    urlText->update(true);
+    this->updateVisibleUrlText();
 }
 
 void URLBar::showKeyboard() {
 
     // TODO: allow text selection and editing, not just wipe
-    this->urlText->setText("");
-    this->urlText->update(true);
+    this->currentUrl = "";
+    this->updateVisibleUrlText();
 
     if (keyboard != NULL) {
         // just show the existing keyboard
@@ -212,20 +230,20 @@ void URLBar::showKeyboard() {
     keyboard->typeAction = [this](char text) {
         if (text == '\b') {
             // backspace
-            if (this->urlText->text.length() <= 0) return;
-            this->urlText->setText(this->urlText->text.substr(0, this->urlText->text.length() - 1));
-            this->urlText->update(true);
+            if (this->currentUrl.length() <= 0) return;
+            this->currentUrl = this->currentUrl.substr(0, this->currentUrl.length() - 1);
+            this->updateInfo();
             return;
         }
         if (text == '\n') {
             // enter
-            this->webView->url = this->urlText->text;
+            this->webView->url = this->currentUrl;
             this->webView->needsLoad = true;
             this->keyboard->hidden = true;
             return;
         }
-        this->urlText->setText(this->urlText->text + text);
-        this->urlText->update(true);
+        this->currentUrl += text;
+        this->updateVisibleUrlText();
     };
 }
 
@@ -263,12 +281,38 @@ bool URLBar::process(InputEvents* event) {
     return false;
 }
 
+CST_Color URLBar::getThemeColor() {
+    CST_Color theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
+
+    bool prevThemeColor = themeIsTooDark;
+
+    // get the theme color from the active webview, and determine if it's too dark
+    themeIsTooDark = false;
+    if (webView != NULL) {
+        theme_color = webView->theme_color;
+
+        if (theme_color.r + theme_color.g + theme_color.b < 0x66 * 3) {
+            // too dark, let's use white text
+            themeIsTooDark = true;
+        }
+    }
+
+    if (prevThemeColor != themeIsTooDark) {
+        // when theme changes, recreate the bar elements
+        createURLBarElements();
+    }
+
+    return theme_color;
+}
+
 void URLBar::render(Element* parent) {
     // Draw background
     auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-
+    
     CST_Rect rect = { 0, 0, width, height };
-    auto theme_color = mainDisplay->theme_color;
+
+    auto theme_color = getThemeColor();
+
     CST_SetDrawColorRGBA(RootDisplay::renderer, theme_color.r, theme_color.g, theme_color.b, 0xff);
     CST_FillRect(RootDisplay::renderer, &rect);
 
@@ -315,6 +359,33 @@ void URLBar::render(Element* parent) {
     }
 
     Element::render(parent);
+}
+
+void URLBar::updateVisibleUrlText() {
+    // set the text to the current url
+    this->urlText->setText(this->currentUrl);
+    this->urlText->update(true);
+
+    // if the text is too long, truncate it and add an ellipsis
+    auto innerWidth = width * 0.8 - (BUTTON_SIZE * 2 + 10); // some padding
+    auto urlTextWidth = this->urlText->width;
+    int trimOffset = 0;
+    while (urlTextWidth > innerWidth) {
+        // keep ellipsis-ing the middle of the URL until it fits
+        trimOffset += 2;
+        this->urlText->setText(
+            this->currentUrl.substr(0, this->currentUrl.length()/2 - trimOffset) +
+            "…" +
+            this->currentUrl.substr(this->currentUrl.length()/2 + trimOffset)
+        );
+        this->urlText->update(true);
+        urlTextWidth = this->urlText->width;
+    }
+
+    // update the window title
+    if (webView != NULL) {
+        CST_SetWindowTitle(webView->windowTitle.c_str());
+    }
 }
 
 void URLBar::saveCurTabScreenshot(bool isPrivate) {

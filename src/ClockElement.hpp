@@ -6,7 +6,7 @@
 class ClockElement : public Element
 {
 public:
-	ClockElement();
+	ClockElement(bool useLightText, bool is12Hour);
 
 	CST_Font* clockFont = NULL;
 	int topVal = 12;

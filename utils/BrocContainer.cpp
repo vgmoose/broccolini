@@ -221,7 +221,7 @@ void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw
     }
 
     // save this image to the map cache to be positioned later
-    printf("Saving image to cache: %s\n", src);
+    printf("Saving image to memory cache: %s\n", src);
     this->imageCache[src] = img;
 
     img->position(-1000, -1000); // draw off screen at first, will be positioned later (but we start loading asap)
@@ -302,6 +302,7 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
 
 void BrocContainer::set_caption(const char* caption ) {
     // std::cout << "Setting caption to: " << caption << std::endl;
+    webView->windowTitle = caption;
     CST_SetWindowTitle(caption);
 }
 
@@ -458,7 +459,7 @@ std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag
             };
             // set the theme color
             auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-            mainDisplay->theme_color = chesto_color;
+            webView->theme_color = chesto_color;
             printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
         }
     }

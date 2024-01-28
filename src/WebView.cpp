@@ -5,6 +5,7 @@
 #include "../libs/chesto/src/NetImageElement.hpp"
 #include "MainDisplay.hpp"
 #include "URLBar.hpp"
+#include "../utils/UIUtils.hpp"
 
 #include <iostream>
 #include <string>
@@ -32,6 +33,7 @@ bool WebView::process(InputEvents* e)
     if (needsLoad) {
         this->downloadPage();
         needsLoad = false;
+        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
         return true;
     }
 
@@ -164,43 +166,32 @@ std::string sanitize_url(std::string url, bool isHTTPS = false)
     return url;
 }
 
-void WebView::handle_http_code(int httpCode, std::map<std::string, std::string> headerResp) {
+bool WebView::handle_http_code(int httpCode, std::map<std::string, std::string> headerResp) {
+    if (this->contents == "") {
+        if (httpCode == 404) {
+            this->contents = load_special_page("not_found");
+            return true;
+        } else if (httpCode == 403) {
+            this->contents = load_special_page("forbidden");
+            return true;
+        }
+        this->contents = load_special_page("no_content", std::to_string(httpCode).c_str());
+    }
+
     std::cout << "Got non 200 HTTP code: " << httpCode << std::endl;
+
     if (httpCode == 301 || httpCode == 302) {
         // redirect (TODO: cache?)
         this->url = sanitize_url(headerResp["location"], this->url.find("https://") != std::string::npos);
-        ((MainDisplay*)RootDisplay::mainDisplay)->urlBar->updateInfo();
+        auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+        mainDisplay->urlBar->currentUrl = this->url;
+        mainDisplay->urlBar->updateInfo();
         redirectCount ++;
         downloadPage();
+        return false;
     }
-}
 
-// takes any number of arguments to swap into the page template
-std::string load_special_page(std::string pageName, ...) {
-    // load one of the stock "special" pages from RAMFS
-    std::string specialPath = RAMFS "res/pages/" + pageName + ".html";
-    std::ifstream t(specialPath);
-    std::stringstream buffer;
-    buffer << t.rdbuf();
-    std::string ret = buffer.str();
-
-    // replace ret {1} with the first argument, {2} with the second, etc.
-    va_list args;
-    va_start(args, pageName);
-    for (int x=0; x<10; x++) {
-        // up to 10 arguments supported to replace
-        std::string replaceStr = "{" + std::to_string(x+1) + "}";
-        std::cout << "The X is " << x << " and the replaceStr is " << replaceStr << std::endl;
-        if (ret.find(replaceStr) == std::string::npos) {
-            // slower, but more cautious (make sure tha replaceStr (eg. {1}) is present)
-            // (apparently va_arg is hard to find the end of)
-            break;
-        }
-        std::string replaceWith = va_arg(args, char*);
-        ret = myReplace(ret, replaceStr, replaceWith);
-    }
-    va_end(args);
-    return ret;
+    return true;
 }
 
 void WebView::downloadPage()
@@ -260,8 +251,10 @@ void WebView::downloadPage()
         std::cout << "Too many redirects, aborting" << std::endl;
         this->contents = load_special_page("too_many_redirects");
     }
-    else if (httpCode != 200 && httpCode != 404 && httpCode != 403 && httpCode != 0) {
-        handle_http_code(httpCode, headerResp);
+
+    bool keepLoading = handle_http_code(httpCode, headerResp);
+
+    if (!keepLoading) {        
         return;
     }
 
@@ -297,7 +290,7 @@ void WebView::downloadPage()
     }
 
     // reset the theme color
-    mainDisplay->theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
+    this->theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
 
     container = new BrocContainer(this);
     container->set_base_url(this->url.c_str());
@@ -316,6 +309,10 @@ void WebView::downloadPage()
         urlBar->clockButton->hidden = false;
         urlBar->forwardButton->hidden = true;
     }
+
+    mainDisplay->urlBar->webView = this;
+    mainDisplay->urlBar->currentUrl = this->url;
+    mainDisplay->urlBar->updateInfo();
 }
 
 void WebView::screenshot(std::string path) {

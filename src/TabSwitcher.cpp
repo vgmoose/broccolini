@@ -7,6 +7,7 @@
 #include "../libs/chesto/src/Container.hpp"
 #include "../libs/chesto/src/Constraint.hpp"
 #include "./MainDisplay.hpp"
+#include "../utils/UIUtils.hpp"
 
 TabSwitcher::TabSwitcher()
 {
@@ -28,7 +29,7 @@ void TabSwitcher::createTabCards() {
     auto mainDisplay = ((MainDisplay*)RootDisplay::mainDisplay);
 
     // add close button in the top right
-    closeButton = (new ImageElement(RAMFS "res/icons/x.svg"))
+    closeButton = createThemedIcon("x")
         ->setSize(35, 50)
         ->constrain(ALIGN_RIGHT, 22)
         ->setAction([this, mainDisplay]() {
@@ -43,7 +44,7 @@ void TabSwitcher::createTabCards() {
     closeButton->y = 12;
     child(closeButton);
 
-    privateButton = (new ImageElement(RAMFS "res/icons/private.svg"))
+    privateButton = createThemedIcon("private")
         ->setSize(40, 45)
         ->constrain(ALIGN_LEFT, 22)
         ->setAction([this, mainDisplay]() {
@@ -97,6 +98,7 @@ void TabSwitcher::createTabCards() {
                 // update the URLBar's current tab
                 auto urlBar = mainDisplay->urlBar;
                 urlBar->webView = mainDisplay->getActiveWebView();
+                urlBar->currentUrl = urlBar->webView->url;
                 urlBar->updateInfo();
             });
             newTabCard->setTouchable(true);
@@ -124,6 +126,7 @@ void TabSwitcher::createTabCards() {
             // update the URLBar's current tab
             auto urlBar = mainDisplay->urlBar;
             urlBar->webView = mainDisplay->getActiveWebView();
+            urlBar->currentUrl = urlBar->webView->url;
             urlBar->updateInfo();
         });
         card->setTouchable(true);

@@ -3,21 +3,26 @@
 #include "ClockElement.hpp"
 #include "../utils/Utils.hpp"
 
-ClockElement::ClockElement()
+ClockElement::ClockElement(bool useLightText, bool is12Hour)
 {
     this->width = 50;
     this->height = 50;
 
     clockFont = CST_CreateFont();
     CST_LoadFont(
-        clockFont, RootDisplay::renderer,
+        clockFont,
+        RootDisplay::renderer,
         RAMFS "res/fonts/OpenSans-Regular.ttf",
-        28, CST_MakeColor(0,0,0,255), TTF_STYLE_NORMAL
+        28,
+        useLightText ? CST_MakeColor(255, 255, 255, 255) : CST_MakeColor(0,0,0,255),
+        TTF_STYLE_NORMAL
     );
 
     this->touchable = true;
+    this->is12Hour = is12Hour;
+
     this->action = [this]() {
-        is12Hour = !is12Hour;
+        this->is12Hour = !this->is12Hour;
     };
 }
 

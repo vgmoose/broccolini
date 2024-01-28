@@ -20,9 +20,6 @@ public:
 	std::vector<WebView*> allTabs;
 	std::vector<WebView*> privateTabs;
 
-	// the color of the window border (can be set via <meta> tags)
-	CST_Color theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
-
 	int activeTabIndex = 0;
 	bool privateMode = false;
 

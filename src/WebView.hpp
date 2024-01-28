@@ -31,12 +31,16 @@ public:
 
     // the "next" url to load if a touch event is successful (receives down and up with no movement in between)
     std::string nextLinkHref = "";
+    std::string windowTitle = "";
 
     // a unique ID that identifies this view, used by caches
     std::string id = "";
 
+    // the color of the window border (can be set via <meta> tags)
+	CST_Color theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
+
     void downloadPage();
-    void handle_http_code(int httpCode, std::map<std::string, std::string> headerResp);
+    bool handle_http_code(int httpCode, std::map<std::string, std::string> headerResp);
 
     bool process(InputEvents *event);
     void render(Element *parent);

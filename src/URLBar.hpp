@@ -14,11 +14,14 @@ public:
 	URLBar(WebView* webView);
     void updateInfo();
 
+    std::string currentUrl = "";
+
     WebView* webView = NULL;
     TextElement* urlText = NULL;
     TabSwitcher* tabSwitcher = NULL;
 
     bool highlightingKeyboard = false;
+    bool themeIsTooDark = false;
 
     Element* forwardButton = NULL;
     Element* clockButton = NULL;
@@ -29,8 +32,14 @@ public:
 
     void showKeyboard();
     void resetBar();
+    void updateVisibleUrlText();
+    void updateIconMaskColors(bool fillWhite);
     void saveCurTabScreenshot(bool isPrivate = false);
+    void createURLBarElements();
+    Element* makeURLBarButton(std::string iconPath, std::function<bool()> action);
 
     bool process(InputEvents* event);
     void render(Element* parent);
+
+    CST_Color getThemeColor();
 };
