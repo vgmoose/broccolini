@@ -238,42 +238,80 @@ void BrocContainer::get_image_size(const char* src, const char* baseurl, litehtm
     }
 }
 
-void BrocContainer::draw_background( litehtml::uint_ptr hdc, const std::vector<litehtml::background_paint>& bgvec ) {
+void BrocContainer::draw_image(
+    litehtml::uint_ptr hdc,
+    const litehtml::background_layer& bg,
+    const std::string& url,
+    const std::string& base_url
+) {
     // printf("Requested to draw background\n");
     auto renderer = RootDisplay::mainDisplay->renderer;
 
-    for (auto bg : bgvec) {
-        CST_Rect dimens = {
-            bg.clip_box.x,
-            bg.clip_box.y,
-            bg.clip_box.width,
-            bg.clip_box.height
-        };
+    CST_Rect dimens = {
+        bg.clip_box.x,
+        bg.clip_box.y,
+        bg.clip_box.width,
+        bg.clip_box.height
+    };
 
-        // printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
-        // printf("Name of image: %s\n", bg.image.c_str());
+    // printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+    printf("Name of image: %s\n", url.c_str());
 
-        // position the image according to the background position
-        if (bg.image.length() > 0) {
-            auto img = this->imageCache[bg.image];
-            if (img != nullptr) {
-                // printf("Positioning image: %s, postion %d, %d\n", bg.image.c_str(), bg.position_x, bg.position_y);
-                img->setPosition(webView->x + bg.position_x, -1*webView->y + bg.position_y);
-                img->setSize(dimens.w, dimens.h);
+    // position the image according to the background position
+    if (url.length() > 0) {
+        auto img = this->imageCache[url];
+        if (img != nullptr) {
+            printf("Positioning image: %s, postion %d, %d\n", url.c_str(), bg.clip_box.x, bg.clip_box.y);
+            img->setPosition(webView->x + bg.clip_box.x, -1*webView->y + bg.clip_box.y);
+            img->setSize(dimens.w, dimens.h);
 
-                // if it's not a background attachment, move it to the front
-                // if (bg.attachment ) {
-                    // printf("Moving image named %s to front, background_attachment=%d\n", bg.image.c_str(), bg.attachment);
-                    // img->moveToFront();
-                // }
-            }
-        } else {
-            // no image, draw a filled rectangle
-            auto radius = bg.border_radius.top_left_x; // TODO: all corners?
-            CST_roundedBoxRGBA(renderer, dimens.x, dimens.y, dimens.x + dimens.w, dimens.y + dimens.h, radius, bg.color.red, bg.color.green, bg.color.blue, bg.color.alpha);
+            // if it's not a background attachment, move it to the front
+            // if (bg.attachment ) {
+                // printf("Moving image named %s to front, background_attachment=%d\n", bg.image.c_str(), bg.attachment);
+                // img->moveToFront();
+            // }
         }
+    } else {
+        // no image, draw a filled rectangle
+        printf("NOTICE: Shouldn't be here, draw_solid_fill should have been called instead\n");
+        auto radius = bg.border_radius.top_left_x; // TODO: all corners?
+        // CST_roundedBoxRGBA(renderer, dimens.x, dimens.y, dimens.x + dimens.w, dimens.y + dimens.h, radius, bg.color.red, bg.color.green, bg.color.blue, bg.color.alpha);
     }
+}
 
+void BrocContainer::draw_solid_fill(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::web_color& color) {
+    // printf("Requested to draw solid fill\n");
+    auto renderer = RootDisplay::mainDisplay->renderer;
+
+    CST_Rect dimens = {
+        layer.border_box.x, // clip_box?
+        layer.border_box.y,
+        layer.border_box.width,
+        layer.border_box.height
+    };
+
+    printf("Fill drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+    printf("Color: %d, %d, %d, %d\n", color.red, color.green, color.blue, color.alpha);
+
+    // auto chestoColor = CST_MakeColor(color.red, color.green, color.blue, color.alpha);
+    CST_roundedBoxRGBA(
+        renderer, dimens.x, dimens.y, dimens.x + dimens.w, dimens.y + dimens.h,
+        layer.border_radius.top_left_x, // harcoded to top left corner for now
+        color.red, color.green, color.blue, color.alpha
+    );
+
+}
+
+void BrocContainer::draw_linear_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::linear_gradient& gradient) {
+    printf("TODO: Requested to draw linear gradient\n");
+}
+
+void BrocContainer::draw_radial_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::radial_gradient& gradient) {
+    printf("TODO: Requested to draw radial gradient\n");
+}
+
+void BrocContainer::draw_conic_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::conic_gradient& gradient) {
+    printf("TODO: Requested to draw conic gradient\n");
 }
 
 void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders& borders, const litehtml::position& draw_pos, bool root) {
@@ -450,17 +488,17 @@ std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag
             printf("Found theme-color meta tag\n");
             auto content = attributes.at("content");
             // convert the hex color to a chesto color
-            auto web_color = litehtml::web_color::from_string(content, NULL);
-            CST_Color chesto_color = {
-                web_color.red,
-                web_color.green,
-                web_color.blue,
-                web_color.alpha
-            };
-            // set the theme color
-            auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-            webView->theme_color = chesto_color;
-            printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
+            // auto web_color = litehtml::web_color::from_string(content, NULL);
+            // CST_Color chesto_color = {
+            //     web_color.red,
+            //     web_color.green,
+            //     web_color.blue,
+            //     web_color.alpha
+            // };
+            // // set the theme color
+            // auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+            // webView->theme_color = chesto_color;
+            // printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
         }
     }
 

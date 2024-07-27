@@ -39,7 +39,7 @@ MainDisplay::MainDisplay()
     std::map<std::string, void*> map;
     parseJSON(readFile("./data/favorites.json"), map);
 
-    // print each key and value in the map
+    // // print each key and value in the map
     for (auto const& x : map) {
         if (x.first == "favorites") {
             // our favorites array!

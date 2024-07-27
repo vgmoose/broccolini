@@ -39,7 +39,16 @@ public:
     virtual void draw_list_marker(litehtml::uint_ptr hdc, const litehtml::list_marker& marker) override;
     virtual void load_image(const char* src, const char* baseurl, bool redraw_on_ready) override;
     virtual void get_image_size(const char* src, const char* baseurl, litehtml::size& sz) override;
-    virtual void draw_background( litehtml::uint_ptr hdc, const std::vector<litehtml::background_paint>& bgvec ) override;
+    virtual void draw_image(
+        litehtml::uint_ptr hdc,
+        const litehtml::background_layer& layer,
+        const std::string& url,
+        const std::string& base_url
+    ) override;
+    virtual void draw_solid_fill(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::web_color& color) override;
+    void draw_linear_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::linear_gradient& gradient) override;
+    void draw_radial_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::radial_gradient& gradient) override;
+    void draw_conic_gradient(litehtml::uint_ptr hdc, const litehtml::background_layer& layer, const litehtml::background_layer::conic_gradient& gradient) override;
     virtual void draw_borders(litehtml::uint_ptr hdc, const litehtml::borders& borders, const litehtml::position& draw_pos, bool root) override;
     virtual void set_caption(const char* caption ) override;
     virtual void set_base_url(const char* base_url ) override;
