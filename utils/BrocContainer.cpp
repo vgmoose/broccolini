@@ -18,7 +18,7 @@ BrocContainer::BrocContainer(WebView* webView)
 }
 
 litehtml::uint_ptr BrocContainer::create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) {
-    // std::cout << "Requested to create font: " << faceName << std::endl;
+    // std::cout << "Requested to create font: " << faceName << ", size: " << size << ", weight: " << weight << ", italic: " << italic << ", decoration: " << decoration << std::endl;
     fm->ascent = 0;
     fm->descent = 0;
 
@@ -136,7 +136,7 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
     std::stringstream ss;
     std::string url;
 
-    printf("Going to resolve url: %s\n", src);
+    // printf("Going to resolve url: %s\n", src);
 
     if (
         strncmp(src, "https://", 8) == 0
@@ -173,15 +173,21 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
 
         url = ss.str();
     }
-    printf("Resolved url: %s\n", url.c_str());
+    // printf("Resolved url: %s\n", url.c_str());
 
     return url;
 }
 
 void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw_on_ready) {
-
+    printf("We got a request to render an image\n");
     std::string newUrl = resolve_url(src, baseurl);
     Texture* img = nullptr;
+
+    // if we already have this image in the cache, don't load it again
+    if (this->imageCache.find(newUrl) != this->imageCache.end()) {
+        printf("We already have this image in the cache: %s\n", newUrl.c_str());
+        return;
+    }
     
     std::string srcString = src;
 
@@ -208,6 +214,7 @@ void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw
         // normal url, load it from the network
         // std::cout << "Requested to render Image [" << newUrl << "]" << std::endl;
         auto urlCopy = new std::string(newUrl.c_str());
+        // printf("LOAD to render Image [%s]\n", urlCopy->c_str());
         img = new NetImageElement(
             urlCopy->c_str(),
             []() {
@@ -221,16 +228,18 @@ void BrocContainer::load_image(const char* src, const char* baseurl, bool redraw
     }
 
     // save this image to the map cache to be positioned later
-    printf("Saving image to memory cache: %s\n", src);
-    this->imageCache[src] = img;
+    printf("Saving image to memory cache: %s\n", newUrl.c_str());
+    this->imageCache[newUrl] = img;
 
-    img->position(-1000, -1000); // draw off screen at first, will be positioned later (but we start loading asap)
+    img->position(-1000, -1000); // draw off screen at first, will be positioned later 
+    // img->moveToFront();
     webView->child(img);
 }
 
 void BrocContainer::get_image_size(const char* src, const char* baseurl, litehtml::size& sz) {
     // look up in cache
-    auto img = this->imageCache[src];
+    auto resolvedUrl = resolve_url(src, baseurl);
+    auto img = this->imageCache[resolvedUrl];
 
     if (img != nullptr) {
         sz.width = img->width;
@@ -244,7 +253,7 @@ void BrocContainer::draw_image(
     const std::string& url,
     const std::string& base_url
 ) {
-    // printf("Requested to draw background\n");
+    printf("Requested to draw image\n");
     auto renderer = RootDisplay::mainDisplay->renderer;
 
     CST_Rect dimens = {
@@ -259,7 +268,8 @@ void BrocContainer::draw_image(
 
     // position the image according to the background position
     if (url.length() > 0) {
-        auto img = this->imageCache[url];
+        auto resolvedUrl = resolve_url(url.c_str(), base_url.c_str());
+        auto img = this->imageCache[resolvedUrl];
         if (img != nullptr) {
             printf("Positioning image: %s, postion %d, %d\n", url.c_str(), bg.clip_box.x, bg.clip_box.y);
             img->setPosition(webView->x + bg.clip_box.x, -1*webView->y + bg.clip_box.y);
@@ -290,8 +300,8 @@ void BrocContainer::draw_solid_fill(litehtml::uint_ptr hdc, const litehtml::back
         layer.border_box.height
     };
 
-    printf("Fill drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
-    printf("Color: %d, %d, %d, %d\n", color.red, color.green, color.blue, color.alpha);
+    // printf("Fill drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
+    // printf("Color: %d, %d, %d, %d\n", color.red, color.green, color.blue, color.alpha);
 
     // auto chestoColor = CST_MakeColor(color.red, color.green, color.blue, color.alpha);
     CST_roundedBoxRGBA(

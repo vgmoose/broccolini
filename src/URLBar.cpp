@@ -269,7 +269,25 @@ bool URLBar::process(InputEvents* event) {
             highlightingKeyboard = false;
             return true;
         }
+        // if we're dragging inside the text area, use a different cursor
+        if (event->isTouchDrag()) {
+            CST_SetCursor(CST_CURSOR_TEXT);
+            // also, draw a highlight around the text area
+            CST_SetDrawColorRGBA(RootDisplay::renderer, 0x66, 0x7c, 0x89, 0xff);
+            CST_roundedRectangleRGBA(
+                RootDisplay::renderer,
+                width/2 -  innerWidth/2,
+                height/2 - innerHeight/2,
+                width/2 +  innerWidth/2,
+                height/2 + innerHeight/2,
+                15, 0x0, 0x0, 0x0, 0xff);
+            return true;
+        }
+
     } else if (event->isTouchDrag()) {
+        // just in case, reset the cursor
+        CST_SetCursor(CST_CURSOR_ARROW);
+
         highlightingKeyboard = false;
         if (event->xPos < width && event->yPos < height) {
             // we're dragging outside of the text-editable area, but still on the URL bar, we can refresh

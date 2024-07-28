@@ -293,6 +293,7 @@ void WebView::downloadPage()
     this->theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
 
     container = new BrocContainer(this);
+    // printf("Resetting container\n");
     container->set_base_url(this->url.c_str());
 
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
