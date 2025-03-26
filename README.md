@@ -3,6 +3,11 @@ A lightweight web browser for video game consoles and other low-dependency devic
 
 Broccolini uses [litehtml](https://github.com/litehtml/litehtml) as its rendering engine. litehtml is not intended to be used in a "full-fledged" browser, but it is usable!
 
+|       URL Webview        |      Tab Switcher        |
+:-------------------------:|:-------------------------:
+![Wikipedia demo](https://github.com/user-attachments/assets/060d91ab-3f61-4bd0-9279-10c28ba5f0a5) | ![Tab overview](https://github.com/user-attachments/assets/101fd92f-f5bc-43dc-9a55-069e9e68ec53)
+
+
 ### What Works
 - renders HTML and CSS!
 - inertia scrolling and touch-based navigation
@@ -34,10 +39,10 @@ Broccolini uses [litehtml](https://github.com/litehtml/litehtml) as its renderin
 ### Download
 There are no stable releases available yet, however there are in-development builds for each platform under [GH Actions](https://github.com/vgmoose/broccolini/actions).
 
-Nightly links: [Console builds](https://nightly.link/fortheusers/hb-appstore/workflows/main/main) - [PC builds](https://nightly.link/fortheusers/hb-appstore/workflows/pc-builds/main)
+Nightly links: [Console builds](https://nightly.link/vgmoose/broccolini/workflows/main/main) - [PC builds](https://nightly.link/vgmoose/broccolini/workflows/pc-builds/main)
 
 ### Building for PC
-Requires SDL2 development libraries for your operating system, and a C++ toolchain.
+**As of this time, building must be done on a case-sensitive filesystem.** Requires SDL2 development libraries for your operating system, and a C++ toolchain.
 
 ```
 git clone --recursive git@github.com:vgmoose/broccolini.git
@@ -51,7 +56,7 @@ After building, `broccolini.bin` will be present in the current directory.
 Support for the Wii U and Switch consoles is provided using [homebrew](https://en.wikipedia.org/wiki/Homebrew_(video_games)) libraries, thanks to community maintained SDL2 ports and toolchains. The [Sealeo](https://github.com/fortheusers/sealeo) docker image contains pinned versions of these dependencies.
 
 ```
-git clone --recursive git@github.com:vgmoose/broccolini.git
+git clone --recursive https://github.com/vgmoose/broccolini.git
 cd broccolini
 export PLATFORM=wiiu    # or switch
 docker run -v $(pwd):/code -it ghcr.io/fortheusers/sealeo "make $PLATFORM"
