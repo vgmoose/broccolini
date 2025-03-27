@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <string>
 #include <map>
+#include <cstdint>
 
 // the struct to be passed in the write function.
 typedef struct
