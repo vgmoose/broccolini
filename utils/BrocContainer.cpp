@@ -386,7 +386,7 @@ void BrocContainer::set_base_url(const char* base_url ) {
 void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const litehtml::element::ptr& el ) {
     auto href = el->get_attr("href");
     auto rel = el->get_attr("rel");
-    // std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
+    std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
 }
 
 // returns each render item's box positions, with placement offsets
@@ -456,7 +456,16 @@ void BrocContainer::on_anchor_click(const char* url, const litehtml::element::pt
 }
 
 void BrocContainer::set_cursor(const char* cursor ) {
-    // std::cout << "Setting cursor to: " << cursor << std::endl;
+    std::string cursorStr = cursor;
+
+    // auto el = m_root_render->get_element_by_point(0, 0, 10, 10);
+    // printf("ELEMENT: %s\n", el->get_tagName().c_str());
+
+    if (cursorStr == "pointer") {
+        CST_SetCursor(CST_CURSOR_HAND);
+    } else {
+        CST_SetCursor(CST_CURSOR_ARROW);
+    }
 }
 
 void BrocContainer::transform_text(litehtml::string& text, litehtml::text_transform tt ) {
@@ -484,8 +493,8 @@ void BrocContainer::del_clip( ) {
 void BrocContainer::get_client_rect(litehtml::position& client ) const {
     // fill client rect with viewport size
     // printf("Getting client rect\n");
-    client.width = RootDisplay::screenWidth;
-    client.height = RootDisplay::screenHeight;
+    client.width = RootDisplay::screenWidth * webView->zoomLevel;
+    client.height = RootDisplay::screenHeight * webView->zoomLevel;
 }
 
 std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
@@ -498,17 +507,39 @@ std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag
             printf("Found theme-color meta tag\n");
             auto content = attributes.at("content");
             // convert the hex color to a chesto color
-            // auto web_color = litehtml::web_color::from_string(content, NULL);
-            // CST_Color chesto_color = {
-            //     web_color.red,
-            //     web_color.green,
-            //     web_color.blue,
-            //     web_color.alpha
-            // };
-            // // set the theme color
-            // auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
-            // webView->theme_color = chesto_color;
-            // printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
+            litehtml::web_color web_color;
+            // try to parse it as a HEX, IDENT, FUNCTION, or STRING
+            std::vector<litehtml::css_token_type> types = {
+                litehtml::css_token_type::HASH,
+                litehtml::css_token_type::IDENT,
+                litehtml::css_token_type::FUNCTION,
+                litehtml::css_token_type::STRING
+            };
+            // if it starts with a #, remove it
+            if (content[0] == '#') {
+                content = content.substr(1);
+            }
+            // try to parse as each type
+            for (auto type : types) {
+                litehtml::css_token cssToken(litehtml::css_token_type(type), content.c_str());
+                bool parsed = litehtml::parse_color(cssToken, web_color, this);
+                if (parsed) {
+                    CST_Color chesto_color = {
+                        web_color.red,
+                        web_color.green,
+                        web_color.blue,
+                        web_color.alpha
+                    };
+                    // set the theme color
+                    auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+                    webView->theme_color = chesto_color;
+                    printf("Set theme color to: %d, %d, %d, %d\n", chesto_color.r, chesto_color.g, chesto_color.b, chesto_color.a);
+                    // also set the entire background of the window to this color
+                    mainDisplay->backgroundColor = fromRGB(chesto_color.r, chesto_color.g, chesto_color.b);
+                    mainDisplay->hasBackground = true;
+                    break;
+                }
+            }
         }
     }
 

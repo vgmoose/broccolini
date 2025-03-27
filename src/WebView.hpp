@@ -26,6 +26,8 @@ public:
     BrocContainer* prevContainer = nullptr;
     int redirectCount = 0;
 
+    float zoomLevel = 1; // 100% zoom
+
     // a vector of all the rectangles of the currently being clicked link
     std::vector<CST_Rect> nextLinkRects;
 

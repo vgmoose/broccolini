@@ -39,9 +39,23 @@ bool WebView::process(InputEvents* e)
 
     litehtml::position::vector redraw_boxes;
 
+    if (e->pressed(A_BUTTON)) {
+        zoomLevel += 0.1;
+        printf("Zoom level: %f\n", zoomLevel);
+        return true;
+    }
+
+    if (e->pressed(B_BUTTON)) {
+        zoomLevel -= 0.1;
+        printf("Zoom level: %f\n", zoomLevel);
+        return true;
+    }
+
+    bool resp = false;
+
     if (e->isTouchDown()) {
         // we call up first so that we can get the element that will clicked, and display it as highlighted
-        bool resp = this->m_doc->on_lbutton_up(
+        resp = this->m_doc->on_lbutton_up(
             -1*this->x + e->xPos, -1*this->y + e->yPos,
             e->xPos, e->yPos,
             redraw_boxes
@@ -53,14 +67,14 @@ bool WebView::process(InputEvents* e)
         );
         // printf("Got touch down with response %d\n", redraw_boxes.size());
     } else if (e->isTouchUp()) {
-        bool resp = this->m_doc->on_lbutton_up(
+        resp = this->m_doc->on_lbutton_up(
             -1*this->x + e->xPos, -1*this->y + e->yPos,
             e->xPos, e->yPos,
             redraw_boxes
         );
         // printf("Got touch up with response %d\n", redraw_boxes.size());
     } else if (e->isTouchDrag()) {
-        bool resp = this->m_doc->on_mouse_over(
+        resp = this->m_doc->on_mouse_over(
             -1*this->x + e->xPos, -1*this->y + e->yPos,
             e->xPos, e->yPos,
             redraw_boxes
@@ -73,7 +87,7 @@ bool WebView::process(InputEvents* e)
     // bool litehtml::document::on_mouse_leave( position::vector& redraw_boxes );
 
     // keep processing child elements
-    return ListElement::processUpDown(e) || ListElement::process(e);
+    return ListElement::processUpDown(e) || ListElement::process(e) || resp;
 }
 
 void WebView::render(Element *parent)
