@@ -12,4 +12,9 @@ CFLAGS		+=	-I$(TOPDIR)/libs/litehtml/src/gumbo/include -I$(TOPDIR)/libs/litehtml
 
 LDFLAGS		+= -lcurl
 
+ifeq (wiiu,$(MAKECMDGOALS))
+SOURCES 	+= $(CHESTO_DIR)/libs/wiiu_kbd
+VPATH 		+= $(CHESTO_DIR)/libs/wiiu_kbd
+endif
+
 include libs/chesto/Makefile
