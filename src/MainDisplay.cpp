@@ -62,18 +62,20 @@ bool MainDisplay::process(InputEvents* event)
     bool ret = Element::process(event);
     if (ret) return true;
 
-    if (event->quitaction == nullptr) {
-        // set up quit callback to serialize the tabs
-        event->quitaction = [this]() {
-            cleanPrivateFiles();
-            writeFile("./data/views.json", fullSessionSummary());
-            writeFile("./data/favorites.json", favoritesSummary());
-            exit(0);
-        };
-    }
+    auto saveAndQuit = [this]() {
+        cleanPrivateFiles();
+        writeFile("./data/views.json", fullSessionSummary());
+        writeFile("./data/favorites.json", favoritesSummary());
+        requestQuit();
+    };
+    // keep processing child elements
     
-	// keep processing child elements
-    this->canUseSelectToExit = true;
+    this->canUseSelectToExit = false; // we'll handle quitting logic ourselves
+    if (event->pressed(SELECT_BUTTON)) {
+        // save the current state and quit (TODO: prompt the user?)
+        saveAndQuit();
+        return true;
+    }
 
     // manually process events for active tab and url bar
 

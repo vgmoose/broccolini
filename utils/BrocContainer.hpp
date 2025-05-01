@@ -28,7 +28,7 @@ public:
     std::string resolve_url(const char* src, const char* baseurl);
 
     // overridden from the litehtml::document_container interface
-    virtual litehtml::uint_ptr create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) override;
+    virtual litehtml::uint_ptr create_font(const litehtml::font_description& descr, const litehtml::document* doc, litehtml::font_metrics* fm) override;
     virtual void delete_font(litehtml::uint_ptr hFont) override;
     virtual int text_width(const char* text, litehtml::uint_ptr hFont) override;
     // virtual void draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
@@ -55,11 +55,12 @@ public:
     virtual void link(const std::shared_ptr<litehtml::document>& doc, const litehtml::element::ptr& el ) override;
     virtual void on_anchor_click(const char* url, const litehtml::element::ptr& el ) override;
     virtual void set_cursor(const char* cursor ) override;
+    virtual void on_mouse_event(const litehtml::element::ptr& el, litehtml::mouse_event event) override;
     virtual void transform_text(litehtml::string& text, litehtml::text_transform tt ) override;
     virtual void import_css(litehtml::string& text, const litehtml::string& url, litehtml::string& baseurl ) override;
     virtual void set_clip(const litehtml::position& pos, const litehtml::border_radiuses& bdr_radius) override;
     virtual void del_clip( ) override;
-    virtual void get_client_rect(litehtml::position& client ) const override;
+    virtual void get_viewport(litehtml::position& viewport ) const override;
     virtual std::shared_ptr<litehtml::element> create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) override;
     virtual void get_media_features(litehtml::media_features& media ) const override;
     virtual void get_language(litehtml::string& language, litehtml::string & culture ) const override;

@@ -7,6 +7,7 @@
 #include <string>
 
 #define START_PAGE "special://home"
+#define SEARCH_URL "https://html.duckduckgo.com/html?q="
 
 // TODO: no forward declare
 class BrocContainer;

@@ -155,7 +155,7 @@ std::string sanitize_url(std::string url, bool isHTTPS = false)
             && url.find(":") == std::string::npos
         ) {
             // no dots and no colons, let's assume it's a search query
-            url = "https://google.com/search?q=" + url;
+            url = SEARCH_URL + url;
         } else {
             // no protocol
             if (isHTTPS) {

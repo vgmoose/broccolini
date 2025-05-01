@@ -17,10 +17,16 @@ BrocContainer::BrocContainer(WebView* webView)
     this->webView = webView;
 }
 
-litehtml::uint_ptr BrocContainer::create_font(const char* faceName, int size, int weight, litehtml::font_style italic, unsigned int decoration, litehtml::font_metrics* fm) {
+litehtml::uint_ptr BrocContainer::create_font(const litehtml::font_description& descr, const litehtml::document* doc, litehtml::font_metrics* fm) {
     // std::cout << "Requested to create font: " << faceName << ", size: " << size << ", weight: " << weight << ", italic: " << italic << ", decoration: " << decoration << std::endl;
     fm->ascent = 0;
     fm->descent = 0;
+
+    auto faceName = descr.family;
+    auto size = descr.size;
+
+    auto italic = descr.decoration_style;
+    auto weight = descr.weight;    
 
     // auto fontKey = std::string(faceName) + "_" + std::to_string(size);
 
@@ -163,12 +169,22 @@ std::string BrocContainer::resolve_url(const char* src, const char* baseurl) {
             }
         } else {
             // this is a relative url, take the base url
-            ss << this->base_url;
-            // make sure there's a trailing slash
-            if (this->base_url[this->base_url.length() - 1] != '/') {
-                ss << "/";
+            std::string curUrl = this->base_url;
+            // strip out the GET parameters (TODO: does this affect the baseurl elsewhere?)
+            auto questionMark = curUrl.find("?");
+            if (questionMark != std::string::npos) {
+                curUrl = curUrl.substr(0, questionMark);
             }
-            ss << src;
+            // same for the hash
+            auto hash = curUrl.find("#");
+            if (hash != std::string::npos) {
+                curUrl = curUrl.substr(0, hash);
+            }
+            // make sure there's a trailing slash
+            if (curUrl[curUrl.length() - 1] != '/') {
+                curUrl += "/";
+            }
+            ss << curUrl << src;
         }
 
         url = ss.str();
@@ -384,9 +400,10 @@ void BrocContainer::set_base_url(const char* base_url ) {
 }
 
 void BrocContainer::link(const std::shared_ptr<litehtml::document>& doc, const litehtml::element::ptr& el ) {
-    auto href = el->get_attr("href");
-    auto rel = el->get_attr("rel");
-    std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
+    // TODO: get_attr can return unsafe values, so we should check for existence
+    // auto href = el->get_attr("href");
+    // auto rel = el->get_attr("rel");
+    // std::cout << "<link> tag detected for href: " << href << " with rel: " << rel << std::endl;
 }
 
 // returns each render item's box positions, with placement offsets
@@ -490,7 +507,7 @@ void BrocContainer::del_clip( ) {
     // printf("Call from del_clip\n");
 }
 
-void BrocContainer::get_client_rect(litehtml::position& client ) const {
+void BrocContainer::get_viewport(litehtml::position& client ) const {
     // fill client rect with viewport size
     // printf("Getting client rect\n");
     client.width = RootDisplay::screenWidth * webView->zoomLevel;
@@ -575,3 +592,11 @@ void BrocContainer::get_media_features(litehtml::media_features& media ) const {
 void BrocContainer::get_language(litehtml::string& language, litehtml::string & culture ) const {
     printf("Getting language\n");
 }
+
+void BrocContainer::on_mouse_event(const litehtml::element::ptr& el, litehtml::mouse_event event) {
+    // printf("Mouse event: %d\n", event);
+    // auto el = m_root_render->get_element_by_point(0, 0, 10, 10);
+    // printf("ELEMENT: %s\n", el->get_tagName().c_str());
+    // printf("Mouse event: %d\n", event);
+}
+    

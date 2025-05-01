@@ -515,6 +515,10 @@ std::string readFile(const std::string& path) {
 
 void parseJSON(const std::string& json, std::map<std::string, void*>& map)
 {
+	// check if the string is empty first
+	if (json.empty()) {
+		return;
+	}
 	// use nlohmann json to parse the json
 	auto data = nlohmann::json::parse(json);
 
