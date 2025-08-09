@@ -1,4 +1,5 @@
 #include "VirtualDOM.hpp"
+#include "JSEngine.hpp"
 #include "WebView.hpp"
 #include <litehtml.h>
 #include <iostream>
@@ -12,44 +13,77 @@ VirtualDOM::~VirtualDOM() {
 }
 
 bool VirtualDOM::initializeSnabbdom() {
+    std::cout << "VirtualDOM::initializeSnabbdom() called" << std::endl;
+    
     if (!webView || !webView->jsEngine) {
         std::cerr << "Error: JSEngine not available for VirtualDOM initialization" << std::endl;
         return false;
     }
     
     jsEngine = webView->jsEngine;
+    std::cout << "VirtualDOM: JSEngine assigned" << std::endl;
     
     // TODO: Load Snabbdom library from libs/snabbdom/
     // For now, we'll implement a simple virtual DOM without Snabbdom
     // and add Snabbdom integration later
     
+    std::cout << "VirtualDOM: Setting up DOM bindings" << std::endl;
     setupDOMBindings();
+    std::cout << "VirtualDOM: DOM bindings complete" << std::endl;
     
     return true;
 }
 
 void VirtualDOM::setupDOMBindings() {
-    if (!jsEngine) return;
+    std::cout << "VirtualDOM::setupDOMBindings() called" << std::endl;
     
-    // Register basic DOM creation functions
+    if (!jsEngine) {
+        std::cout << "Error: No JSEngine available for DOM bindings" << std::endl;
+        return;
+    }
+    
+    std::cout << "VirtualDOM: Registering DOM functions" << std::endl;
+    
+    // Register DOM manipulation functions
     jsEngine->registerFunction("createElement", js_createElement);
     jsEngine->registerFunction("createTextNode", js_createTextNode);
     jsEngine->registerFunction("getElementById", js_getElementById);
     
-    // Create a simple document object with basic functions
+    std::cout << "VirtualDOM: Creating document object" << std::endl;
+    
+    // Create a document object with enhanced functions
     js_State* J = jsEngine->getState();
-    js_newobject(J);
-    {
+    
+    try {
+        js_newobject(J);
+        
+        std::cout << "VirtualDOM: Adding createElement to document" << std::endl;
         js_newcfunction(J, js_createElement, "createElement", 1);
         js_setproperty(J, -2, "createElement");
         
+        std::cout << "VirtualDOM: Adding createTextNode to document" << std::endl;
         js_newcfunction(J, js_createTextNode, "createTextNode", 1);
         js_setproperty(J, -2, "createTextNode");
         
+        std::cout << "VirtualDOM: Adding getElementById to document" << std::endl;
         js_newcfunction(J, js_getElementById, "getElementById", 1);
         js_setproperty(J, -2, "getElementById");
+        
+        std::cout << "VirtualDOM: Adding querySelector to document" << std::endl;
+        js_newcfunction(J, js_querySelector, "querySelector", 1);
+        js_setproperty(J, -2, "querySelector");
+        
+        std::cout << "VirtualDOM: Setting document global" << std::endl;
+        js_setglobal(J, "document");
+        
+        std::cout << "VirtualDOM: Document object created successfully" << std::endl;
+        
+    } catch (...) {
+        std::cout << "Error: Exception during document object creation" << std::endl;
+        return;
     }
-    js_setglobal(J, "document");
+    
+    std::cout << "VirtualDOM: Setup complete" << std::endl;
 }
 
 std::shared_ptr<VNode> VirtualDOM::createVNodeFromJS(js_State* J, int index) {
@@ -154,21 +188,54 @@ std::shared_ptr<VNode> VirtualDOM::findNodeById(std::shared_ptr<VNode> node, con
 
 // JavaScript binding implementations
 void VirtualDOM::js_createElement(js_State* J) {
-    const char* tagName = js_tostring(J, 1);
+    if (js_gettop(J) < 1) {
+        std::cout << "Warning: createElement called without arguments" << std::endl;
+        js_pushnull(J);
+        return;
+    }
     
-    // Create a simple JavaScript object representing a DOM element
+    const char* tagName = js_tostring(J, 1);
+    if (!tagName) {
+        std::cout << "Warning: createElement called with non-string argument" << std::endl;
+        js_pushnull(J);
+        return;
+    }
+    
+    // Create a JavaScript object representing a DOM element
     js_newobject(J);
     js_pushstring(J, tagName);
     js_setproperty(J, -2, "tagName");
     js_pushstring(J, "");
     js_setproperty(J, -2, "textContent");
+    js_pushstring(J, "");
+    js_setproperty(J, -2, "innerHTML");
+    js_pushstring(J, "");
+    js_setproperty(J, -2, "id");
     
-    // Add basic methods
-    // TODO: Add appendChild, setAttribute, etc.
+    // Add DOM manipulation methods
+    js_newcfunction(J, js_appendChild, "appendChild", 1);
+    js_setproperty(J, -2, "appendChild");
+    
+    // Add the updateTextContent method to each element
+    js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
+    js_setproperty(J, -2, "updateTextContent");
+    
+    std::cout << "Created element: " << tagName << std::endl;
 }
 
 void VirtualDOM::js_createTextNode(js_State* J) {
+    if (js_gettop(J) < 1) {
+        std::cout << "Warning: createTextNode called without arguments" << std::endl;
+        js_pushnull(J);
+        return;
+    }
+    
     const char* text = js_tostring(J, 1);
+    if (!text) {
+        std::cout << "Warning: createTextNode called with non-string argument" << std::endl;
+        js_pushnull(J);
+        return;
+    }
     
     // Create a text node object
     js_newobject(J);
@@ -176,14 +243,333 @@ void VirtualDOM::js_createTextNode(js_State* J) {
     js_setproperty(J, -2, "tagName");
     js_pushstring(J, text);
     js_setproperty(J, -2, "textContent");
+    js_pushstring(J, text);
+    js_setproperty(J, -2, "nodeValue");
+    
+    std::cout << "Created text node: " << text << std::endl;
 }
 
 void VirtualDOM::js_getElementById(js_State* J) {
+    if (js_gettop(J) < 1) {
+        std::cout << "Warning: getElementById called without arguments" << std::endl;
+        js_pushnull(J);
+        return;
+    }
+    
     const char* id = js_tostring(J, 1);
+    if (!id) {
+        std::cout << "Warning: getElementById called with non-string argument" << std::endl;
+        js_pushnull(J);
+        return;
+    }
     
-    // For now, return null - we'll implement this properly later
-    // when we have full DOM tree synchronization
+    // Get VirtualDOM instance from JavaScript user data
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        std::cout << "Warning: VirtualDOM not available in getElementById" << std::endl;
+        js_pushnull(J);
+        return;
+    }
+    
+    if (!vdom->webView || !vdom->webView->m_doc) {
+        js_pushnull(J);
+        return;
+    }
+    
+    // Search for element in litehtml document
+    auto element = vdom->findElementByIdInLiteHTML(id);
+    if (element) {
+        // Create JavaScript object representing the found element
+        js_newobject(J);
+        js_pushstring(J, element->get_tagName());
+        js_setproperty(J, -2, "tagName");
+        js_pushstring(J, id);
+        js_setproperty(J, -2, "id");
+        
+        // Create textContent property with custom behavior
+        // We'll intercept this by overriding the object's behavior
+        js_pushstring(J, "");
+        js_setproperty(J, -2, "_textContent");
+        
+        // Add DOM manipulation methods
+        js_newcfunction(J, js_appendChild, "appendChild", 1);
+        js_setproperty(J, -2, "appendChild");
+        
+        // Add method that JavaScript can use for setting text content
+        js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
+        js_setproperty(J, -2, "updateTextContent");
+        
+        std::cout << "Found element by ID: " << id << std::endl;
+    } else {
+        js_pushnull(J);
+        std::cout << "Element not found by ID: " << id << std::endl;
+    }
+}
+
+void VirtualDOM::js_querySelector(js_State* J) {
+    const char* selector = js_tostring(J, 1);
+    
+    // For now, implement basic ID selector (#id) and tag selector
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        js_pushnull(J);
+        return;
+    }
+    
+    std::string sel(selector);
+    if (sel[0] == '#') {
+        // ID selector
+        std::string id = sel.substr(1);
+        // Reuse getElementById logic
+        js_pushstring(J, id.c_str());
+        js_getElementById(J);
+        return;
+    }
+    
+    // For now, return null for other selectors
     js_pushnull(J);
+    std::cout << "querySelector not fully implemented for: " << selector << std::endl;
+}
+
+void VirtualDOM::js_appendChild(js_State* J) {
+    // Get the child element to append
+    if (!js_isobject(J, 1)) {
+        js_pushundefined(J);
+        return;
+    }
     
-    std::cout << "getElementById called for: " << id << std::endl;
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom || !vdom->webView || !vdom->webView->m_doc) {
+        js_pushundefined(J);
+        return;
+    }
+    
+    // Get parent element ID (from 'this' context)
+    std::string parentId = "";
+    if (js_hasproperty(J, 0, "id")) {
+        js_getproperty(J, 0, "id");
+        const char* id = js_tostring(J, -1);
+        if (id) parentId = id;
+        js_pop(J, 1);
+    }
+    
+    // Get child element info
+    js_getproperty(J, 1, "tagName");
+    const char* childTag = js_tostring(J, -1);
+    js_pop(J, 1);
+    
+    js_getproperty(J, 1, "textContent");
+    const char* childText = js_tostring(J, -1);
+    js_pop(J, 1);
+    
+    if (childTag && strlen(childTag) > 0) {
+        // This is where we'll create actual litehtml elements and append them
+        std::cout << "Attempting to appendChild: " << childTag;
+        if (childText && strlen(childText) > 0) {
+            std::cout << " with text: " << childText;
+        }
+        std::cout << std::endl;
+        
+        // For now, we'll implement this as a DOM manipulation that triggers re-render
+        vdom->appendElementToDOM(childTag, childText, parentId);
+    }
+    
+    // Return the appended child
+    js_copy(J, 1);
+}
+
+// Helper method to update text content of an element
+void VirtualDOM::js_updateTextContent(js_State* J) {
+    if (js_gettop(J) < 1) {
+        js_pushundefined(J);
+        return;
+    }
+    
+    const char* newText = js_tostring(J, 1);
+    if (!newText) {
+        js_pushundefined(J);
+        return;
+    }
+    
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom || !vdom->webView) {
+        js_pushundefined(J);
+        return;
+    }
+    
+    // Get the element ID from 'this' context
+    std::string elementId = "";
+    if (js_hasproperty(J, 0, "id")) {
+        js_getproperty(J, 0, "id");
+        const char* id = js_tostring(J, -1);
+        if (id) elementId = id;
+        js_pop(J, 1);
+    }
+    
+    if (!elementId.empty()) {
+        std::cout << "Updating text content of element '" << elementId << "' to: " << newText << std::endl;
+        vdom->updateElementTextContent(elementId, newText);
+    }
+    
+    js_pushundefined(J);
+}
+
+// Helper method to actually append to DOM
+void VirtualDOM::appendElementToDOM(const std::string& tagName, const std::string& textContent, const std::string& parentId) {
+    if (!webView || !webView->m_doc) return;
+    
+    // Create the new HTML element
+    std::string newElement = "<" + tagName + ">" + textContent + "</" + tagName + ">";
+    
+    std::string& html = webView->contents;
+    
+    if (!parentId.empty()) {
+        // Try to find the specific parent element by ID
+        std::string idPattern = "id=\"" + parentId + "\"";
+        size_t idPos = html.find(idPattern);
+        
+        if (idPos != std::string::npos) {
+            // Find the end of the opening tag
+            size_t tagStart = html.rfind('<', idPos);
+            if (tagStart != std::string::npos) {
+                size_t tagEnd = html.find('>', idPos);
+                if (tagEnd != std::string::npos) {
+                    // Find the corresponding closing tag
+                    std::string openTag = html.substr(tagStart, tagEnd - tagStart + 1);
+                    std::string tagNameOnly = openTag.substr(1, openTag.find(' ') - 1);
+                    if (tagNameOnly.find(' ') == std::string::npos && tagNameOnly.find('>') != std::string::npos) {
+                        tagNameOnly = tagNameOnly.substr(0, tagNameOnly.find('>'));
+                    }
+                    
+                    std::string closingTag = "</" + tagNameOnly + ">";
+                    size_t closePos = html.find(closingTag, tagEnd);
+                    
+                    if (closePos != std::string::npos) {
+                        // Insert the new element just before the closing tag
+                        html.insert(closePos, newElement);
+                        
+                        std::cout << "Appended " << tagName << " to parent element with ID: " << parentId << std::endl;
+                        triggerLiteHTMLRerender();
+                        return;
+                    }
+                }
+            }
+        }
+        
+        std::cout << "Could not find parent element with ID: " << parentId << ", falling back to body" << std::endl;
+    }
+    
+    // Fallback: append to body
+    size_t bodyEnd = html.find("</body>");
+    if (bodyEnd != std::string::npos) {
+        html.insert(bodyEnd, newElement);
+        
+        std::cout << "Modified HTML contents. First 500 chars:" << std::endl;
+        std::cout << html.substr(0, 500) << std::endl;
+        
+        // Trigger a re-render
+        triggerLiteHTMLRerender();
+        
+        std::cout << "Appended " << tagName << " to DOM and triggered re-render" << std::endl;
+    } else {
+        std::cout << "Could not find </body> tag to append element" << std::endl;
+        std::cout << "HTML contents preview: " << html.substr(0, 200) << std::endl;
+    }
+}
+
+// Helper method to update text content of an existing element
+void VirtualDOM::updateElementTextContent(const std::string& elementId, const std::string& newText) {
+    if (!webView) return;
+    
+    std::string& html = webView->contents;
+    
+    // Find the element with the given ID
+    std::string idPattern = "id=\"" + elementId + "\"";
+    size_t idPos = html.find(idPattern);
+    
+    if (idPos != std::string::npos) {
+        // Find the opening tag
+        size_t tagStart = html.rfind('<', idPos);
+        if (tagStart != std::string::npos) {
+            size_t tagEnd = html.find('>', idPos);
+            if (tagEnd != std::string::npos) {
+                // Find the closing tag
+                std::string openTag = html.substr(tagStart, tagEnd - tagStart + 1);
+                
+                // Extract the tag name
+                size_t spacePos = openTag.find(' ');
+                size_t closePos = openTag.find('>');
+                std::string tagName;
+                if (spacePos != std::string::npos && spacePos < closePos) {
+                    tagName = openTag.substr(1, spacePos - 1);
+                } else {
+                    tagName = openTag.substr(1, closePos - 1);
+                }
+                
+                std::string closingTag = "</" + tagName + ">";
+                size_t closeTagPos = html.find(closingTag, tagEnd);
+                
+                if (closeTagPos != std::string::npos) {
+                    // Replace the content between opening and closing tags
+                    size_t contentStart = tagEnd + 1;
+                    size_t contentLength = closeTagPos - contentStart;
+                    
+                    html.replace(contentStart, contentLength, newText);
+                    
+                    std::cout << "Updated text content of element '" << elementId << "' to: " << newText << std::endl;
+                    triggerLiteHTMLRerender();
+                    return;
+                }
+            }
+        }
+    }
+    
+    std::cout << "Could not find element with ID: " << elementId << std::endl;
+}
+
+// Helper methods for litehtml integration
+litehtml::element::ptr VirtualDOM::findElementByIdInLiteHTML(const std::string& id) {
+    if (!webView || !webView->m_doc) {
+        return nullptr;
+    }
+    
+    // Use litehtml's select_one method on the root element
+    std::string selector = "#" + id;
+    auto root = webView->m_doc->root();
+    if (root) {
+        return root->select_one(selector);
+    }
+    return nullptr;
+}
+
+void VirtualDOM::appendElementToLiteHTML(litehtml::element::ptr parent, litehtml::element::ptr child) {
+    if (!parent || !child) return;
+    
+    // Use litehtml's appendChild method
+    parent->appendChild(child);
+    
+    // Trigger re-render
+    triggerLiteHTMLRerender();
+}
+
+void VirtualDOM::triggerLiteHTMLRerender() {
+    if (!webView) return;
+    
+    // Force a complete document recreation from the modified HTML
+    webView->recreateDocument();
+    
+    std::cout << "Triggered complete litehtml document recreation" << std::endl;
+}
+
+VirtualDOM* VirtualDOM::getVirtualDOMFromJS(js_State* J, int idx) {
+    // Get the JSEngine from the context
+    void* context = js_getcontext(J);
+    if (context) {
+        JSEngine* jsEngine = static_cast<JSEngine*>(context);
+        if (jsEngine && jsEngine->getWebView()) {
+            return jsEngine->getWebView()->virtualDOM;
+        }
+    }
+    
+    return nullptr;
 }

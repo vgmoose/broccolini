@@ -32,6 +32,7 @@ public:
     std::string getLastError() const { return lastError; }
     
     js_State* getState() { return J; }
+    WebView* getWebView() { return webView; }
     
 private:
     js_State* J;

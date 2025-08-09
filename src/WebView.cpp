@@ -475,3 +475,28 @@ void WebView::cleanupJavaScript() {
         jsEngine = nullptr;
     }
 }
+
+void WebView::recreateDocument() {
+    if (!container) return;
+    
+    std::cout << "Starting document recreation..." << std::endl;
+    
+    // Store the current state
+    std::string currentUrl = this->url;
+    
+    // Clear the current document reference first
+    this->m_doc = nullptr;
+    
+    // Now safely delete and recreate the container
+    delete container;
+    container = new BrocContainer(this);
+    container->set_base_url(currentUrl.c_str());
+    
+    // Recreate the document from modified contents
+    this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
+    this->needsRender = true;
+    
+    std::cout << "Successfully recreated litehtml document from modified contents" << std::endl;
+    
+    // Do NOT execute page scripts again as that would cause infinite loops
+}

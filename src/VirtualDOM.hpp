@@ -1,18 +1,17 @@
-#ifndef VIRTUALDOM_HPP
-#define VIRTUALDOM_HPP
+#ifndef VIRTUAL_DOM_HPP
+#define VIRTUAL_DOM_HPP
 
-#include <string>
-#include <map>
-#include <vector>
 #include <memory>
-#include "JSEngine.hpp"
+#include <string>
+#include <vector>
+#include <unordered_map>
+#include <functional>
+#include <litehtml.h>
+#include "mujs.h"
 
 // Forward declarations
+class JSEngine;
 class WebView;
-namespace litehtml {
-    class element;
-    class document;
-}
 
 // Simple Virtual DOM node representation
 struct VNode {
@@ -54,6 +53,13 @@ public:
     // Set up basic DOM API functions in JavaScript
     void setupDOMBindings();
     
+    // DOM manipulation methods that work with litehtml
+    litehtml::element::ptr findElementByIdInLiteHTML(const std::string& id);
+    void appendElementToLiteHTML(litehtml::element::ptr parent, litehtml::element::ptr child);
+    void triggerLiteHTMLRerender();
+    void appendElementToDOM(const std::string& tagName, const std::string& textContent, const std::string& parentId = "");
+    void updateElementTextContent(const std::string& elementId, const std::string& newText);
+    
 private:
     WebView* webView;
     JSEngine* jsEngine;
@@ -63,10 +69,16 @@ private:
     static void js_createElement(js_State* J);
     static void js_createTextNode(js_State* J);
     static void js_getElementById(js_State* J);
+    static void js_querySelector(js_State* J);
+    static void js_appendChild(js_State* J);
+    static void js_updateTextContent(js_State* J);
     
     // Helper functions
     std::shared_ptr<VNode> findNodeById(std::shared_ptr<VNode> node, const std::string& id);
     void traverseLiteHTMLElement(litehtml::element* element, std::shared_ptr<VNode> parent);
+    
+    // Get VirtualDOM instance from JavaScript context
+    static VirtualDOM* getVirtualDOMFromJS(js_State* J, int index = -1);
 };
 
 #endif // VIRTUALDOM_HPP

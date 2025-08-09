@@ -73,5 +73,8 @@ public:
     void executeScriptsFromDocument();
     bool executeJavaScript(const std::string& script);
     void cleanupJavaScript();
+    
+    // Method to recreate document from modified contents
+    void recreateDocument();
 };
 #endif // WEBVIEW_H
