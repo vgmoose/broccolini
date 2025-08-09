@@ -6,6 +6,8 @@
 #include "MainDisplay.hpp"
 #include "URLBar.hpp"
 #include "../utils/UIUtils.hpp"
+#include "JSEngine.hpp"
+#include "VirtualDOM.hpp"
 
 #include <iostream>
 #include <string>
@@ -23,6 +25,13 @@ WebView::WebView()
 
     // put a random number into the ID string
     this->id = std::to_string(rand()) + std::to_string(rand());
+    
+    // Initialize JavaScript support
+    initializeJavaScript();
+}
+
+WebView::~WebView() {
+    cleanupJavaScript();
 }
 
 bool WebView::process(InputEvents* e)
@@ -313,6 +322,9 @@ void WebView::downloadPage()
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
     this->needsRender = true;
 
+    // Execute JavaScript after document is loaded
+    executePageScripts();
+
     // clear and append the history up to this point, if the current index is not the current url
     if (historyIndex < 0 || history[historyIndex] != this->url) {
         history.erase(history.begin() + historyIndex + 1, history.end());
@@ -353,4 +365,113 @@ std::string WebView::fullSessionSummary() {
         summary = summary.substr(0, summary.size() - 2);
     summary += "\n\t\t\t]\n\t\t}";
     return summary;
+}
+
+// JavaScript-related method implementations
+void WebView::initializeJavaScript() {
+    if (!jsEnabled) return;
+    
+    try {
+        jsEngine = new JSEngine(this);
+        virtualDOM = new VirtualDOM(this);
+        
+        if (virtualDOM->initializeSnabbdom()) {
+            std::cout << "JavaScript engine initialized successfully" << std::endl;
+        } else {
+            std::cerr << "Failed to initialize Virtual DOM" << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error initializing JavaScript: " << e.what() << std::endl;
+        cleanupJavaScript();
+    }
+}
+
+void WebView::executePageScripts() {
+    if (!jsEnabled || !jsEngine || !m_doc) return;
+    
+    std::cout << "Executing page scripts..." << std::endl;
+    
+    // Test basic JavaScript functionality
+    executeJavaScript("console.log('JavaScript engine is working!');");
+    
+    // Find and execute script tags from the HTML document
+    // We need to traverse the litehtml document to find script elements
+    executeScriptsFromDocument();
+}
+
+void WebView::executeScriptsFromDocument() {
+    if (!m_doc) return;
+    
+    // For now, we'll implement a basic script extraction
+    // This is a simplified approach - in a full implementation, we'd properly traverse the DOM tree
+    
+    // Look for script content in the original HTML
+    std::string html = this->contents;
+    size_t pos = 0;
+    
+    while ((pos = html.find("<script", pos)) != std::string::npos) {
+        // Find the end of the opening script tag
+        size_t tagEnd = html.find(">", pos);
+        if (tagEnd == std::string::npos) break;
+        
+        // Check if this is a script with type="text/javascript" or no type (default)
+        std::string openingTag = html.substr(pos, tagEnd - pos + 1);
+        bool isJavaScript = true;
+        
+        // Simple check for non-JavaScript script types
+        if (openingTag.find("type=") != std::string::npos && 
+            openingTag.find("javascript") == std::string::npos &&
+            openingTag.find("text/javascript") == std::string::npos &&
+            openingTag.find("application/javascript") == std::string::npos) {
+            isJavaScript = false;
+        }
+        
+        if (isJavaScript) {
+            // Find the closing script tag
+            size_t scriptEnd = html.find("</script>", tagEnd);
+            if (scriptEnd != std::string::npos) {
+                // Extract the script content
+                std::string scriptContent = html.substr(tagEnd + 1, scriptEnd - tagEnd - 1);
+                
+                // Trim whitespace
+                size_t start = scriptContent.find_first_not_of(" \t\n\r");
+                size_t end = scriptContent.find_last_not_of(" \t\n\r");
+                
+                if (start != std::string::npos && end != std::string::npos) {
+                    scriptContent = scriptContent.substr(start, end - start + 1);
+                    
+                    if (!scriptContent.empty()) {
+                        std::cout << "Executing script: " << std::endl << scriptContent.substr(0, 100) << "..." << std::endl;
+                        executeJavaScript(scriptContent);
+                    }
+                }
+            }
+        }
+        
+        pos = tagEnd + 1;
+    }
+}
+
+bool WebView::executeJavaScript(const std::string& script) {
+    if (!jsEnabled || !jsEngine) return false;
+    
+    bool success = jsEngine->executeScript(script);
+    
+    if (!success) {
+        std::cerr << "JavaScript execution failed: " << jsEngine->getLastError() << std::endl;
+    }
+    
+    return success;
+}
+
+void WebView::cleanupJavaScript() {
+    if (virtualDOM) {
+        delete virtualDOM;
+        virtualDOM = nullptr;
+    }
+    
+    if (jsEngine) {
+        delete jsEngine;
+        jsEngine = nullptr;
+    }
 }

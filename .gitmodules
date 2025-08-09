@@ -7,3 +7,9 @@
 [submodule "libs/json"]
 	path = libs/json
 	url = https://github.com/nlohmann/json.git
+[submodule "libs/mujs"]
+	path = libs/mujs
+	url = https://github.com/ccxvii/mujs
+[submodule "libs/snabbdom"]
+	path = libs/snabbdom
+	url = https://github.com/snabbdom/snabbdom

@@ -11,11 +11,14 @@
 
 // TODO: no forward declare
 class BrocContainer;
+class JSEngine;
+class VirtualDOM;
 
 class WebView : public ListElement
 {
 public:
     WebView();
+    ~WebView();
     std::string url;
     std::string contents;
     litehtml::document::ptr m_doc;
@@ -28,6 +31,15 @@ public:
     int redirectCount = 0;
 
     float zoomLevel = 1; // 100% zoom
+
+    // JavaScript engine for executing scripts
+    JSEngine* jsEngine = nullptr;
+    
+    // Virtual DOM manager
+    VirtualDOM* virtualDOM = nullptr;
+    
+    // Flag to enable/disable JavaScript execution
+    bool jsEnabled = true;
 
     // a vector of all the rectangles of the currently being clicked link
     std::vector<CST_Rect> nextLinkRects;
@@ -54,5 +66,12 @@ public:
     std::string fullSessionSummary();
     // void screenshotPage();
     void screenshot(std::string path);
+    
+    // JavaScript-related methods
+    void initializeJavaScript();
+    void executePageScripts();
+    void executeScriptsFromDocument();
+    bool executeJavaScript(const std::string& script);
+    void cleanupJavaScript();
 };
 #endif // WEBVIEW_H
