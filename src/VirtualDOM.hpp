@@ -13,6 +13,10 @@
 class JSEngine;
 class WebView;
 
+// Forward declarations
+class JSEngine;
+class WebView;
+
 // Simple Virtual DOM node representation
 struct VNode {
     std::string tag;
@@ -72,6 +76,19 @@ private:
     static void js_querySelector(js_State* J);
     static void js_appendChild(js_State* J);
     static void js_updateTextContent(js_State* J);
+    
+    // Property setter system
+    static void setupElementPropertySetters(js_State* J);
+    static void setupWindowObject(js_State* J);
+    static void setupDocumentProperties(js_State* J);
+    
+    // Property getters/setters
+    static void js_textContentSetter(js_State* J);
+    static void js_textContentGetter(js_State* J);
+    static void js_innerHTMLSetter(js_State* J);
+    static void js_innerHTMLGetter(js_State* J);
+    static void js_documentTitleSetter(js_State* J);
+    static void js_documentTitleGetter(js_State* J);
     
     // Helper functions
     std::shared_ptr<VNode> findNodeById(std::shared_ptr<VNode> node, const std::string& id);

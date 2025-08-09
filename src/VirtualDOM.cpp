@@ -78,6 +78,13 @@ void VirtualDOM::setupDOMBindings() {
         
         std::cout << "VirtualDOM: Document object created successfully" << std::endl;
         
+        // Set up advanced property interceptors
+        std::cout << "VirtualDOM: Setting up document properties" << std::endl;
+        setupDocumentProperties(J);
+        
+        std::cout << "VirtualDOM: Setting up window object" << std::endl;
+        setupWindowObject(J);
+        
     } catch (...) {
         std::cout << "Error: Exception during document object creation" << std::endl;
         return;
@@ -205,10 +212,12 @@ void VirtualDOM::js_createElement(js_State* J) {
     js_newobject(J);
     js_pushstring(J, tagName);
     js_setproperty(J, -2, "tagName");
+    
+    // Store internal properties with underscore prefix
     js_pushstring(J, "");
-    js_setproperty(J, -2, "textContent");
+    js_setproperty(J, -2, "_textContent");
     js_pushstring(J, "");
-    js_setproperty(J, -2, "innerHTML");
+    js_setproperty(J, -2, "_innerHTML");
     js_pushstring(J, "");
     js_setproperty(J, -2, "id");
     
@@ -219,6 +228,9 @@ void VirtualDOM::js_createElement(js_State* J) {
     // Add the updateTextContent method to each element
     js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
     js_setproperty(J, -2, "updateTextContent");
+    
+    // Set up property interceptors for this element
+    setupElementPropertySetters(J);
     
     std::cout << "Created element: " << tagName << std::endl;
 }
@@ -286,10 +298,11 @@ void VirtualDOM::js_getElementById(js_State* J) {
         js_pushstring(J, id);
         js_setproperty(J, -2, "id");
         
-        // Create textContent property with custom behavior
-        // We'll intercept this by overriding the object's behavior
+        // Store internal properties with underscore prefix
         js_pushstring(J, "");
         js_setproperty(J, -2, "_textContent");
+        js_pushstring(J, "");
+        js_setproperty(J, -2, "_innerHTML");
         
         // Add DOM manipulation methods
         js_newcfunction(J, js_appendChild, "appendChild", 1);
@@ -298,6 +311,9 @@ void VirtualDOM::js_getElementById(js_State* J) {
         // Add method that JavaScript can use for setting text content
         js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
         js_setproperty(J, -2, "updateTextContent");
+        
+        // Set up property interceptors for this element
+        setupElementPropertySetters(J);
         
         std::cout << "Found element by ID: " << id << std::endl;
     } else {
@@ -572,4 +588,181 @@ VirtualDOM* VirtualDOM::getVirtualDOMFromJS(js_State* J, int idx) {
     }
     
     return nullptr;
+}
+
+// Property setter system implementation
+void VirtualDOM::setupElementPropertySetters(js_State* J) {
+    // Set up textContent property with getter/setter
+    js_newobject(J); // descriptor object
+    js_newcfunction(J, js_textContentGetter, "get", 0);
+    js_setproperty(J, -2, "get");
+    js_newcfunction(J, js_textContentSetter, "set", 1);
+    js_setproperty(J, -2, "set");
+    js_pushboolean(J, 1); // enumerable
+    js_setproperty(J, -2, "enumerable");
+    js_defproperty(J, -2, "textContent", 0);
+    
+    // Set up innerHTML property with getter/setter
+    js_newobject(J); // descriptor object
+    js_newcfunction(J, js_innerHTMLGetter, "get", 0);
+    js_setproperty(J, -2, "get");
+    js_newcfunction(J, js_innerHTMLSetter, "set", 1);
+    js_setproperty(J, -2, "set");
+    js_pushboolean(J, 1); // enumerable
+    js_setproperty(J, -2, "enumerable");
+    js_defproperty(J, -2, "innerHTML", 0);
+}
+
+void VirtualDOM::setupWindowObject(js_State* J) {
+    std::cout << "VirtualDOM: Setting up window object" << std::endl;
+    
+    // Create window object
+    js_newobject(J);
+    
+    // Add document reference to window
+    js_getglobal(J, "document");
+    js_setproperty(J, -2, "document");
+    
+    // Add alert function
+    js_newcfunction(J, [](js_State *J) {
+        const char* message = js_tostring(J, 1);
+        std::cout << "[ALERT] " << (message ? message : "undefined") << std::endl;
+    }, "alert", 1);
+    js_setproperty(J, -2, "alert");
+    
+    // Add console reference to window
+    js_getglobal(J, "console");
+    js_setproperty(J, -2, "console");
+    
+    // Set window as global
+    js_setglobal(J, "window");
+    
+    std::cout << "VirtualDOM: Window object created successfully" << std::endl;
+}
+
+void VirtualDOM::setupDocumentProperties(js_State* J) {
+    std::cout << "VirtualDOM: Setting up document properties" << std::endl;
+    
+    js_getglobal(J, "document");
+    
+    // Set up document.title property with getter/setter
+    js_newobject(J); // descriptor object
+    js_newcfunction(J, js_documentTitleGetter, "get", 0);
+    js_setproperty(J, -2, "get");
+    js_newcfunction(J, js_documentTitleSetter, "set", 1);
+    js_setproperty(J, -2, "set");
+    js_pushboolean(J, 1); // enumerable
+    js_setproperty(J, -2, "enumerable");
+    js_defproperty(J, -2, "title", 0);
+    
+    js_pop(J, 1); // pop document object
+    
+    std::cout << "VirtualDOM: Document properties set up successfully" << std::endl;
+}
+
+// Property getter/setter implementations
+void VirtualDOM::js_textContentGetter(js_State* J) {
+    // Get the internal _textContent property
+    if (js_hasproperty(J, 0, "_textContent")) {
+        js_getproperty(J, 0, "_textContent");
+    } else {
+        js_pushstring(J, "");
+    }
+}
+
+void VirtualDOM::js_textContentSetter(js_State* J) {
+    const char* value = js_tostring(J, 1);
+    std::cout << "Property assignment intercepted: textContent = \"" << value << "\"" << std::endl;
+    
+    // Store in internal property
+    js_pushstring(J, value);
+    js_setproperty(J, 0, "_textContent");
+    
+    // Get element ID if available and trigger DOM update
+    if (js_hasproperty(J, 0, "id")) {
+        js_getproperty(J, 0, "id");
+        const char* elementId = js_tostring(J, -1);
+        js_pop(J, 1);
+        
+        if (elementId && strlen(elementId) > 0) {
+            std::cout << "Triggering DOM update for element '" << elementId << "'" << std::endl;
+            
+            // Get VirtualDOM instance and update
+            VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+            if (vdom) {
+                vdom->updateElementTextContent(elementId, value);
+                
+                // Trigger document recreation
+                if (vdom->webView) {
+                    vdom->webView->recreateDocument();
+                }
+            }
+        }
+    }
+}
+
+void VirtualDOM::js_innerHTMLGetter(js_State* J) {
+    // Get the internal _innerHTML property
+    if (js_hasproperty(J, 0, "_innerHTML")) {
+        js_getproperty(J, 0, "_innerHTML");
+    } else {
+        js_pushstring(J, "");
+    }
+}
+
+void VirtualDOM::js_innerHTMLSetter(js_State* J) {
+    const char* value = js_tostring(J, 1);
+    std::cout << "Property assignment intercepted: innerHTML = \"" << value << "\"" << std::endl;
+    
+    // Store in internal property
+    js_pushstring(J, value);
+    js_setproperty(J, 0, "_innerHTML");
+    
+    // Get element ID if available and trigger DOM update
+    if (js_hasproperty(J, 0, "id")) {
+        js_getproperty(J, 0, "id");
+        const char* elementId = js_tostring(J, -1);
+        js_pop(J, 1);
+        
+        if (elementId && strlen(elementId) > 0) {
+            std::cout << "Triggering innerHTML update for element '" << elementId << "'" << std::endl;
+            
+            // Get VirtualDOM instance and update
+            VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+            if (vdom) {
+                // For innerHTML, we'd need more sophisticated parsing
+                // For now, treat it like textContent
+                vdom->updateElementTextContent(elementId, value);
+                
+                // Trigger document recreation
+                if (vdom->webView) {
+                    vdom->webView->recreateDocument();
+                }
+            }
+        }
+    }
+}
+
+void VirtualDOM::js_documentTitleGetter(js_State* J) {
+    // Get current document title from WebView
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView) {
+        // For now, return a placeholder - you can implement title storage in WebView
+        js_pushstring(J, "Broccolini Browser");
+    } else {
+        js_pushstring(J, "");
+    }
+}
+
+void VirtualDOM::js_documentTitleSetter(js_State* J) {
+    const char* title = js_tostring(J, 1);
+    std::cout << "Property assignment intercepted: document.title = \"" << title << "\"" << std::endl;
+    
+    // Get VirtualDOM instance and update title
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView) {
+        // You can implement setTitle in WebView class
+        std::cout << "Setting document title to: " << title << std::endl;
+        // vdom->webView->setTitle(title); // Implement this in WebView
+    }
 }
