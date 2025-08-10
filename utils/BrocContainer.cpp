@@ -444,36 +444,9 @@ std::vector<std::tuple<litehtml::position, litehtml::size>> get_draw_areas(
 }
 
 void BrocContainer::on_anchor_click(const char* url, const litehtml::element::ptr& el) {
-
-    // use a hack to grab the internal render list from the target element
-    // TODO: not do this? either fork litehtml or find another way
-    auto draw_areas = get_draw_areas(el->m_renders);
-
-    if (webView->nextLinkHref == "") {
-        // copy the data from the areas in the CST_Rects of nextLinkRects
-        webView->nextLinkRects.clear();
-        for (auto area : draw_areas) {
-            auto pos = std::get<0>(area);
-            auto sz  = std::get<1>(area);
-            CST_Rect rect = {
-                webView->x + pos.x, webView->y + pos.y,
-                sz.width, sz.height
-            };
-            webView->nextLinkRects.push_back(rect);
-        }
-        webView->nextLinkHref = url;
-        return; // return early
-    }
-    else if (webView->nextLinkHref == url) {
-        // do the actual redirect
-        std::string newUrl = resolve_url(url, "");
-        webView->url = newUrl;
-        webView->needsLoad = true;
-
-        auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
-        urlBar->urlText->setText(webView->url.c_str());
-        urlBar->urlText->update();
-    }
+    // This method is now disabled - link clicks are handled by invisible Element overlays
+    // See createChestoLinksFromHTML() and handleLinkClick() for the new implementation
+    std::cout << "on_anchor_click called but disabled - using invisible overlays instead" << std::endl;
 }
 
 void BrocContainer::set_cursor(const char* cursor ) {
@@ -648,7 +621,7 @@ void BrocContainer::cleanupChestoButtons() {
     for (auto& pair : buttonRegistry) {
         Element* overlay = pair.second;
         if (overlay) {
-            std::cout << "Removing overlay from webView..." << std::endl;
+            std::cout << "Removing button overlay from webView..." << std::endl;
             // Remove overlay from webView's children list
             webView->remove(overlay);
             // Note: Not deleting the overlay - Chesto will clean it up automatically
@@ -657,6 +630,30 @@ void BrocContainer::cleanupChestoButtons() {
     buttonRegistry.clear();
     chestoButtonsCreated = false; // Reset the flag
     std::cout << "Button overlays removed from webView (Chesto will handle cleanup)" << std::endl;
+}
+
+void BrocContainer::cleanupChestoLinks() {
+    std::cout << "Starting cleanup of link overlays..." << std::endl;
+    
+    // Just remove overlays from webView's children list and clear registry
+    // Don't delete the Elements - let Chesto handle cleanup automatically
+    for (auto& pair : linkRegistry) {
+        Element* overlay = pair.second;
+        if (overlay) {
+            std::cout << "Removing link overlay from webView..." << std::endl;
+            // Remove overlay from webView's children list
+            webView->remove(overlay);
+            // Note: Not deleting the overlay - Chesto will clean it up automatically
+        }
+    }
+    linkRegistry.clear();
+    chestoLinksCreated = false; // Reset the flag
+    std::cout << "Link overlays removed from webView (Chesto will handle cleanup)" << std::endl;
+}
+
+void BrocContainer::cleanupAllOverlays() {
+    cleanupChestoButtons();
+    cleanupChestoLinks();
 }
 
 void BrocContainer::createChestoButtonsFromHTML() {
@@ -688,6 +685,38 @@ void BrocContainer::createChestoButtonsFromHTML() {
     if (createdAnyButtons) {
         chestoButtonsCreated = true;
         std::cout << "Chesto buttons created successfully" << std::endl;
+    }
+}
+
+void BrocContainer::createChestoLinksFromHTML() {
+    if (!webView || !webView->m_doc || chestoLinksCreated || navigationInProgress) {
+        return; // Skip if already created, no document, or navigation in progress
+    }
+    
+    std::cout << "Creating Chesto links from HTML anchor elements..." << std::endl;
+    
+    // Find all link elements in the document
+    auto root = webView->m_doc->root();
+    if (!root) {
+        std::cout << "No root element found for links" << std::endl;
+        return;
+    }
+    
+    // Use litehtml's select_all method to find all anchor elements with href
+    litehtml::elements_list link_elements = root->select_all("a[href]");
+    
+    std::cout << "Found " << link_elements.size() << " link elements" << std::endl;
+    
+    bool createdAnyLinks = false;
+    for (auto& html_link : link_elements) {
+        if (createChestoLinkFromElement(html_link)) {
+            createdAnyLinks = true;
+        }
+    }
+    
+    if (createdAnyLinks) {
+        chestoLinksCreated = true;
+        std::cout << "Chesto links created successfully" << std::endl;
     }
 }
 
@@ -744,5 +773,91 @@ bool BrocContainer::createChestoButtonFromElement(const litehtml::element::ptr& 
               << ") with size " << placement.width << "x" << placement.height << std::endl;
     
     return true;
+}
+
+bool BrocContainer::createChestoLinkFromElement(const litehtml::element::ptr& html_link) {
+    if (!html_link) return false;
+    
+    // Get the href attribute
+    const char* href = html_link->get_attr("href");
+    if (!href || strlen(href) == 0) {
+        std::cout << "Link has no href attribute, skipping" << std::endl;
+        return false;
+    }
+    
+    // Get link text content for debugging
+    std::string linkText;
+    html_link->get_text(linkText);
+    if (linkText.empty()) {
+        linkText = href; // Use href as fallback
+    }
+    
+    std::cout << "Creating invisible overlay for link: '" << linkText << "' -> " << href << std::endl;
+    
+    // Get the link's position using get_placement()
+    litehtml::position placement = html_link->get_placement();
+    
+    if (placement.width <= 0 || placement.height <= 0) {
+        std::cout << "Link has no dimensions (w:" << placement.width << " h:" << placement.height << "), skipping" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Link placement: x=" << placement.x << " y=" << placement.y 
+              << " w=" << placement.width << " h=" << placement.height << std::endl;
+    
+    // Create invisible Element overlay 
+    Element* overlay = new Element();
+    
+    // Set dimensions and make it touchable but invisible
+    overlay->width = placement.width;
+    overlay->height = placement.height;
+    overlay->touchable = true;
+    overlay->hidden = false;  // Not hidden, just no background
+    overlay->hasBackground = false;  // No background = invisible
+    
+    // Position the overlay over the HTML link
+    overlay->position(placement.x, placement.y);
+    
+    // Set up the click callback
+    overlay->action = [this, html_link]() {
+        std::cout << "Invisible overlay clicked for link!" << std::endl;
+        this->handleLinkClick(html_link);
+    };
+    
+    // Add overlay to webView as a child
+    webView->child(overlay);
+    
+    // Store in registry for cleanup later
+    linkRegistry[html_link] = overlay;
+    
+    std::cout << "Created invisible link overlay at (" << placement.x << ", " << placement.y 
+              << ") with size " << placement.width << "x" << placement.height << std::endl;
+    
+    return true;
+}
+
+void BrocContainer::handleLinkClick(const litehtml::element::ptr& link_element) {
+    if (!link_element) return;
+    
+    std::cout << "Processing link click..." << std::endl;
+    
+    // Get the href attribute
+    const char* href = link_element->get_attr("href");
+    if (!href || strlen(href) == 0) {
+        std::cout << "Link has no href attribute" << std::endl;
+        return;
+    }
+    
+    std::cout << "Navigating to: " << href << std::endl;
+    
+    // Resolve the URL and navigate (using the same logic as the old on_anchor_click)
+    std::string newUrl = resolve_url(href, "");
+    webView->url = newUrl;
+    webView->needsLoad = true;
+
+    // Update URL bar
+    auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
+    urlBar->urlText->setText(webView->url.c_str());
+    urlBar->urlText->update();
 }
     

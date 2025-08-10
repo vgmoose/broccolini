@@ -122,8 +122,9 @@ void WebView::render(Element *parent)
             this->x, this->y, &posObj
         );
         
-        // After drawing (which populates render areas), create Chesto buttons for HTML button elements
+        // After drawing (which populates render areas), create Chesto overlays for HTML elements
         container->createChestoButtonsFromHTML();
+        container->createChestoLinksFromHTML();
     }
 
     // render the child elements (above whatever we just drew)
@@ -312,8 +313,8 @@ void WebView::downloadPage()
         // delete all children
         wipeAll();
         
-        // Clean up any existing Chesto buttons before creating a new container
-        container->cleanupChestoButtons();
+        // Clean up any existing Chesto overlays before creating a new container
+        container->cleanupAllOverlays();
         
         // TODO: crashes, deletes too early, but do this instead
         prevContainer = container;

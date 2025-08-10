@@ -29,10 +29,16 @@ public:
     // create a map to store HTML buttons mapped to invisible Chesto Element overlays
     std::map<litehtml::element::ptr, Element*> buttonRegistry;
     
+    // create a map to store HTML links mapped to invisible Chesto Element overlays
+    std::map<litehtml::element::ptr, Element*> linkRegistry;
+    
     // Flag to prevent repeated button creation
     bool chestoButtonsCreated = false;
     
-    // Flag to prevent button creation during navigation to avoid cleanup issues
+    // Flag to prevent repeated link creation
+    bool chestoLinksCreated = false;
+    
+    // Flag to prevent button/link creation during navigation to avoid cleanup issues
     bool navigationInProgress = false;
 
     std::string resolve_url(const char* src, const char* baseurl);
@@ -79,6 +85,13 @@ public:
     void createChestoButtonsFromHTML();
     bool createChestoButtonFromElement(const litehtml::element::ptr& html_button);
     void cleanupChestoButtons();
+    
+    // Link support methods  
+    void handleLinkClick(const litehtml::element::ptr& link_element);
+    void createChestoLinksFromHTML();
+    bool createChestoLinkFromElement(const litehtml::element::ptr& html_link);
+    void cleanupChestoLinks();
+    void cleanupAllOverlays(); // Clean up both buttons and links
     virtual void get_media_features(litehtml::media_features& media ) const override;
     virtual void get_language(litehtml::string& language, litehtml::string & culture ) const override;
 };
