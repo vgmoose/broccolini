@@ -25,7 +25,7 @@ litehtml::uint_ptr BrocContainer::create_font(const litehtml::font_description& 
     auto faceName = descr.family;
     auto size = descr.size;
 
-    auto italic = descr.decoration_style;
+    auto italic = descr.style;
     auto weight = descr.weight;    
 
     // auto fontKey = std::string(faceName) + "_" + std::to_string(size);
@@ -102,9 +102,9 @@ void BrocContainer::delete_font(litehtml::uint_ptr hFont) {
     this->fontCache.erase(hFont);
 }
 
-int BrocContainer::text_width(const char* text, litehtml::uint_ptr hFont) {
+litehtml::pixel_t BrocContainer::text_width(const char* text, litehtml::uint_ptr hFont) {
     auto font = this->fontCache[hFont];
-    return  CST_GetFontWidth(font, text);
+    return (litehtml::pixel_t)CST_GetFontWidth(font, text);
 }
 
 void BrocContainer::draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) {
@@ -121,12 +121,12 @@ void BrocContainer::draw_text(litehtml::uint_ptr hdc, const char* text, litehtml
     }
 }
 
-int BrocContainer::pt_to_px(int pt) const {
-    return pt;
+litehtml::pixel_t BrocContainer::pt_to_px(float pt) const {
+    return (litehtml::pixel_t)pt;
 }
 
-int BrocContainer::get_default_font_size() const {
-    return 20;
+litehtml::pixel_t BrocContainer::get_default_font_size() const {
+    return 20.0f;
 }
 
 const char* BrocContainer::get_default_font_name() const {
@@ -269,7 +269,7 @@ void BrocContainer::draw_image(
     const std::string& url,
     const std::string& base_url
 ) {
-    printf("Requested to draw image\n");
+    // printf("Requested to draw image\n");
     auto renderer = RootDisplay::mainDisplay->renderer;
 
     CST_Rect dimens = {
@@ -280,14 +280,14 @@ void BrocContainer::draw_image(
     };
 
     // printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
-    printf("Name of image: %s\n", url.c_str());
+    // printf("Name of image: %s\n", url.c_str());
 
     // position the image according to the background position
     if (url.length() > 0) {
         auto resolvedUrl = resolve_url(url.c_str(), base_url.c_str());
         auto img = this->imageCache[resolvedUrl];
         if (img != nullptr) {
-            printf("Positioning image: %s, postion %d, %d\n", url.c_str(), bg.clip_box.x, bg.clip_box.y);
+            // printf("Positioning image: %s, postion %f, %f\n", url.c_str(), bg.clip_box.x, bg.clip_box.y);
             img->setPosition(webView->x + bg.clip_box.x, -1*webView->y + bg.clip_box.y);
             img->setSize(dimens.w, dimens.h);
 
@@ -582,6 +582,7 @@ std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag
 
 void BrocContainer::get_media_features(litehtml::media_features& media ) const {
     // printf("Getting media features\n");
+    media.type = litehtml::media_type_screen;
     media.width = RootDisplay::screenWidth;
     media.height = RootDisplay::screenHeight;
     media.device_width = RootDisplay::screenWidth;

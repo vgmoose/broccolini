@@ -30,11 +30,11 @@ public:
     // overridden from the litehtml::document_container interface
     virtual litehtml::uint_ptr create_font(const litehtml::font_description& descr, const litehtml::document* doc, litehtml::font_metrics* fm) override;
     virtual void delete_font(litehtml::uint_ptr hFont) override;
-    virtual int text_width(const char* text, litehtml::uint_ptr hFont) override;
+    virtual litehtml::pixel_t text_width(const char* text, litehtml::uint_ptr hFont) override;
     // virtual void draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
     virtual void draw_text(litehtml::uint_ptr hdc, const char* text, litehtml::uint_ptr hFont, litehtml::web_color color, const litehtml::position& pos) override;
-    virtual int pt_to_px(int pt) const override;
-    virtual int get_default_font_size() const override;
+    virtual litehtml::pixel_t pt_to_px(float pt) const override;
+    virtual litehtml::pixel_t get_default_font_size() const override;
     virtual const char* get_default_font_name() const override;
     virtual void draw_list_marker(litehtml::uint_ptr hdc, const litehtml::list_marker& marker) override;
     virtual void load_image(const char* src, const char* baseurl, bool redraw_on_ready) override;
