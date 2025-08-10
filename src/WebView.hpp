@@ -82,8 +82,9 @@ public:
 
     void setTitle(const std::string& title);
     
-    // Navigation methods for JavaScript location object
-    void navigateToUrl(const std::string& newUrl);
+    // Navigation methods
+    void goTo(const std::string& url);
+    void updateStorageDomain(); // Update cookie and localStorage domain from current URL
     void reloadPage();
 };
 #endif // WEBVIEW_H

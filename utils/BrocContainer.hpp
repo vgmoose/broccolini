@@ -32,11 +32,25 @@ public:
     // create a map to store HTML links mapped to invisible Chesto Element overlays
     std::map<litehtml::element::ptr, Element*> linkRegistry;
     
+    // Event listener system - map element to event type to list of listeners
+    struct EventListener {
+        std::string eventType;
+        std::string jsFunction;  // JavaScript function code to execute
+        bool isFunction;         // true if jsFunction is a function, false if inline code
+    };
+    std::map<litehtml::element::ptr, std::vector<EventListener>> eventListeners;
+    
+    // Map element to overlay for event listeners
+    std::map<litehtml::element::ptr, Element*> eventOverlayRegistry;
+    
     // Flag to prevent repeated button creation
     bool chestoButtonsCreated = false;
     
     // Flag to prevent repeated link creation
     bool chestoLinksCreated = false;
+    
+    // Flag to prevent repeated event listener overlay creation
+    bool chestoEventListenersCreated = false;
     
     // Flag to prevent button/link creation during navigation to avoid cleanup issues
     bool navigationInProgress = false;
@@ -91,7 +105,17 @@ public:
     void createChestoLinksFromHTML();
     bool createChestoLinkFromElement(const litehtml::element::ptr& html_link);
     void cleanupChestoLinks();
-    void cleanupAllOverlays(); // Clean up both buttons and links
+    
+    // Event listener support methods
+    void addEventListener(const litehtml::element::ptr& element, const std::string& eventType, const std::string& jsFunction, bool isFunction = true);
+    void removeEventListener(const litehtml::element::ptr& element, const std::string& eventType, const std::string& jsFunction = "");
+    void executeEventListeners(const litehtml::element::ptr& element, const std::string& eventType);
+    void createChestoEventListenersFromHTML();
+    bool createChestoEventOverlayFromElement(const litehtml::element::ptr& element);
+    void enhanceOverlayWithEventListeners(Element* overlay, const litehtml::element::ptr& element);
+    void cleanupChestoEventListeners();
+    
+    void cleanupAllOverlays(); // Clean up buttons, links, and event listeners
     virtual void get_media_features(litehtml::media_features& media ) const override;
     virtual void get_language(litehtml::string& language, litehtml::string & culture ) const override;
 };

@@ -4,9 +4,6 @@
 [submodule "libs/litehtml"]
 	path = libs/litehtml
 	url = https://github.com/litehtml/litehtml.git
-[submodule "libs/json"]
-	path = libs/json
-	url = https://github.com/nlohmann/json.git
 [submodule "libs/mujs"]
 	path = libs/mujs
 	url = https://github.com/ccxvii/mujs

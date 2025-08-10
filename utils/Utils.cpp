@@ -36,8 +36,6 @@
 #include <cstring>
 #include <regex>
 
-#include "../libs/json/single_include/nlohmann/json.hpp"
-
 #include "Utils.hpp"
 
 // resinfs support, if present
@@ -515,43 +513,8 @@ std::string readFile(const std::string& path) {
 
 void parseJSON(const std::string& json, std::map<std::string, void*>& map)
 {
-	// check if the string is empty first
-	if (json.empty()) {
-		return;
-	}
-	// use nlohmann json to parse the json
-	auto data = nlohmann::json::parse(json);
-
-	// iterate through each key in the json
-	for (auto it = data.begin(); it != data.end(); ++it) {
-		// get the key and value
-		std::string key = it.key();
-		auto value = it.value();
-
-		// check the type of the value
-		if (value.is_string()) {
-			// string, add to map
-			map[key] = new std::string(value);
-		}
-		else if (value.is_number()) {
-			// number, add to map
-			map[key] = new int(value);
-		}
-		else if (value.is_boolean()) {
-			// boolean, add to map
-			map[key] = new bool(value);
-		}
-		else if (value.is_array()) {
-			// array, add to map
-			map[key] = new std::vector<std::string>();
-			for (auto& element : value) {
-				((std::vector<std::string>*)map[key])->push_back(element);
-			}
-		}
-		else if (value.is_object()) {
-			// object, add to map (recursively)
-			map[key] = new std::map<std::string, void*>();
-			parseJSON(value.dump(), *(std::map<std::string, void*>*)map[key]);
-		}
-	}
+	// This function is deprecated and should be replaced with direct JSEngine usage
+	// For now, we'll provide a simple passthrough to maintain compatibility
+	// TODO: Remove this function and update callers to use JSEngine directly
+	std::cerr << "Warning: parseJSON(map<string, void*>) is deprecated. Use JSEngine directly." << std::endl;
 }

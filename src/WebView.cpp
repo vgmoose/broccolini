@@ -8,6 +8,7 @@
 #include "../utils/UIUtils.hpp"
 #include "JSEngine.hpp"
 #include "VirtualDOM.hpp"
+#include "StorageManager.hpp"
 
 #include <iostream>
 #include <string>
@@ -125,6 +126,7 @@ void WebView::render(Element *parent)
         // After drawing (which populates render areas), create Chesto overlays for HTML elements
         container->createChestoButtonsFromHTML();
         container->createChestoLinksFromHTML();
+        container->createChestoEventListenersFromHTML();
     }
 
     // render the child elements (above whatever we just drew)
@@ -222,6 +224,25 @@ bool WebView::handle_http_code(int httpCode, std::map<std::string, std::string> 
     return true;
 }
 
+void WebView::updateStorageDomain() {
+    // Skip domain updates for special URLs
+    if (this->url.find("special:") == 0 || this->url.find("mailto:") == 0) {
+        std::cout << "Skipping domain update for special URL: " << this->url << std::endl;
+        return;
+    }
+    
+    // Extract domain from current URL
+    std::string domain = just_domain_from_url(this->url);
+    if (domain.empty() || domain == "n/a") {
+        domain = "localhost";
+    }
+    
+    // Update storage domain using the centralized StorageManager
+    StorageManager::getInstance().setCurrentDomain(domain);
+    
+    std::cout << "Updated storage domain to: " << domain << std::endl;
+}
+
 void WebView::downloadPage()
 {
     auto mainDisplay =  ((MainDisplay*)RootDisplay::mainDisplay);
@@ -232,6 +253,11 @@ void WebView::downloadPage()
 
     this->url = sanitize_url(this->url);
     std::cout << "Downloading page: " << this->url << std::endl;
+    
+    // Update storage domain based on current URL (skip for special URLs)
+    if (!isSpecial && !isMailto) {
+        updateStorageDomain();
+    }
 
     // download the page
     this->contents = "";
@@ -372,20 +398,38 @@ void WebView::screenshot(std::string path) {
 }
 
 std::string WebView::fullSessionSummary() {
-    std::string summary = "\t\t{\n";
-    summary += "\t\t\t\"id\": \"" + id + "\",\n";
-    summary += "\t\t\t\"urlIndex\": " + std::to_string(historyIndex) + ",\n";
-    summary += "\t\t\t\"urls\": \[\n";
-    bool addedOne = false;
-    for (auto url : history) {
-        summary += "\t\t\t\t\"" + url + "\",\n";
-        addedOne = true;
+    // Use muJS JSON stringification instead of manual string building
+    std::map<std::string, std::string> sessionData;
+    sessionData["id"] = id;
+    sessionData["urlIndex"] = std::to_string(historyIndex);
+    
+    // Use JSEngine for JSON stringification instead of MuJSUtils
+    JSEngine jsonEngine(nullptr);
+    js_State* J = jsonEngine.getState();
+    
+    // Create urls array
+    js_newarray(J);
+    for (size_t i = 0; i < history.size(); i++) {
+        js_pushstring(J, history[i].c_str());
+        js_setindex(J, -2, i);
     }
-    // remove the last comma
-    if (addedOne)
-        summary = summary.substr(0, summary.size() - 2);
-    summary += "\n\t\t\t]\n\t\t}";
-    return summary;
+    
+    // Stringify the array
+    js_getglobal(J, "JSON");
+    js_getproperty(J, -1, "stringify");
+    js_copy(J, -3); // copy urls array
+    js_call(J, 1);
+    
+    std::string historyStr = js_tostring(J, -1);
+    
+    // Create final object structure
+    std::string result = "{\n";
+    result += "\t\t\t\"id\": \"" + id + "\",\n";
+    result += "\t\t\t\"urlIndex\": " + std::to_string(historyIndex) + ",\n";
+    result += "\t\t\t\"urls\": " + historyStr + "\n";
+    result += "\t\t}";
+    
+    return result;
 }
 
 // JavaScript-related method implementations
@@ -529,7 +573,7 @@ void WebView::setTitle(const std::string& title) {
     CST_SetWindowTitle(title.c_str());
 }
 
-void WebView::navigateToUrl(const std::string& newUrl) {
+void WebView::goTo(const std::string& newUrl) {
     std::cout << "Navigation requested: " << newUrl << std::endl;
     
     // Update the URL

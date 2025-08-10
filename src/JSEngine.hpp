@@ -28,6 +28,14 @@ public:
     std::string getGlobalString(const std::string& name);
     double getGlobalNumber(const std::string& name);
     
+    // JSON parsing utilities
+    bool parseJSON(const std::string& jsonStr);
+    std::vector<std::string> getArrayFromGlobal(const std::string& globalName, const std::string& arrayPath);
+    
+    // JSON stringification utilities
+    std::string stringifyObject(const std::map<std::string, std::string>& stringMap);
+    std::string stringifyArray(const std::vector<std::string>& stringArray);
+    
     // Error handling
     std::string getLastError() const { return lastError; }
     

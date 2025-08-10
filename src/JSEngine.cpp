@@ -4,8 +4,8 @@
 #include <setjmp.h>
 
 JSEngine::JSEngine(WebView* webView) : webView(webView), lastError("") {
-    // Create new JavaScript state
-    J = js_newstate(nullptr, nullptr, JS_STRICT);
+    // uses non-strict mode to allow undeclared variable assignments
+    J = js_newstate(nullptr, nullptr, 0);
     
     if (!J) {
         lastError = "Failed to create JavaScript state";
@@ -112,6 +112,116 @@ double JSEngine::getGlobalNumber(const std::string& name) {
     return 0.0;
 }
 
+bool JSEngine::parseJSON(const std::string& jsonStr) {
+    if (!J) {
+        lastError = "JavaScript state not initialized";
+        return false;
+    }
+    
+    try {
+        // Create a properly escaped JSON string for safe script execution
+        std::string escapedJson = jsonStr;
+        
+        // Escape backslashes first (must be done before escaping quotes)
+        size_t pos = 0;
+        while ((pos = escapedJson.find("\\", pos)) != std::string::npos) {
+            escapedJson.replace(pos, 1, "\\\\");
+            pos += 2;
+        }
+        
+        // Escape single quotes
+        pos = 0;
+        while ((pos = escapedJson.find("'", pos)) != std::string::npos) {
+            escapedJson.replace(pos, 1, "\\'");
+            pos += 2;
+        }
+        
+        // Escape newlines and tabs
+        pos = 0;
+        while ((pos = escapedJson.find("\n", pos)) != std::string::npos) {
+            escapedJson.replace(pos, 1, "\\n");
+            pos += 2;
+        }
+        
+        pos = 0;
+        while ((pos = escapedJson.find("\t", pos)) != std::string::npos) {
+            escapedJson.replace(pos, 1, "\\t");
+            pos += 2;
+        }
+        
+        pos = 0;
+        while ((pos = escapedJson.find("\r", pos)) != std::string::npos) {
+            escapedJson.replace(pos, 1, "\\r");
+            pos += 2;
+        }
+        
+        std::string script = "var parsedJSON = JSON.parse('" + escapedJson + "');";
+        
+        int result = js_dostring(J, script.c_str());
+        if (result != 0) {
+            lastError = "JSON.parse script execution failed with code: " + std::to_string(result);
+            return false;
+        }
+        
+        std::cout << "JSON.parse executed successfully!" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        lastError = std::string("Exception in parseJSON: ") + e.what();
+        return false;
+    } catch (...) {
+        lastError = "Unknown exception in parseJSON";
+        return false;
+    }
+}
+
+std::vector<std::string> JSEngine::getArrayFromGlobal(const std::string& globalName, const std::string& arrayPath) {
+    std::vector<std::string> result;
+    if (!J) {
+        lastError = "JavaScript state not initialized";
+        return result;
+    }
+    
+    try {
+        // Get the global object
+        js_getglobal(J, globalName.c_str());
+        if (js_isundefined(J, -1)) {
+            lastError = "Global object '" + globalName + "' is undefined";
+            js_pop(J, 1);
+            return result;
+        }
+        
+        // Navigate to the array property
+        js_getproperty(J, -1, arrayPath.c_str());
+        if (!js_isarray(J, -1)) {
+            lastError = "Property '" + arrayPath + "' is not an array";
+            js_pop(J, 2);
+            return result;
+        }
+        
+        // Get array length
+        int length = js_getlength(J, -1);
+        
+        // Extract each array element
+        for (int i = 0; i < length; i++) {
+            js_getindex(J, -1, i);
+            if (js_isstring(J, -1)) {
+                result.push_back(js_tostring(J, -1));
+            }
+            js_pop(J, 1);
+        }
+        
+        js_pop(J, 2); // pop array and global object
+        return result;
+    } catch (const std::exception& e) {
+        lastError = std::string("Exception in getArrayFromGlobal: ") + e.what();
+        return result;
+    } catch (...) {
+        lastError = "Unknown exception in getArrayFromGlobal";
+        return result;
+    }
+}
+
 // Static callback functions
 void JSEngine::reportError(js_State* J, const char* message) {
     JSEngine* engine = static_cast<JSEngine*>(js_getcontext(J));
@@ -147,4 +257,60 @@ void JSEngine::console_log(js_State* J) {
     }
     
     std::cout << std::endl;
+}
+
+std::string JSEngine::stringifyObject(const std::map<std::string, std::string>& stringMap) {
+    if (!J) return "{}";
+    
+    // Clear the stack
+    while (js_gettop(J) > 0) js_pop(J, 1);
+    
+    // Create object
+    js_newobject(J);
+    
+    for (const auto& [key, value] : stringMap) {
+        js_pushstring(J, value.c_str());
+        js_setproperty(J, -2, key.c_str());
+    }
+    
+    // Stringify the object
+    js_getglobal(J, "JSON");
+    js_getproperty(J, -1, "stringify");
+    js_copy(J, -3); // copy object
+    js_call(J, 1);
+    
+    std::string result = js_tostring(J, -1);
+    
+    // Clean up
+    while (js_gettop(J) > 0) js_pop(J, 1);
+    
+    return result;
+}
+
+std::string JSEngine::stringifyArray(const std::vector<std::string>& stringArray) {
+    if (!J) return "[]";
+    
+    // Clear the stack
+    while (js_gettop(J) > 0) js_pop(J, 1);
+    
+    // Create array
+    js_newarray(J);
+    
+    for (size_t i = 0; i < stringArray.size(); i++) {
+        js_pushstring(J, stringArray[i].c_str());
+        js_setindex(J, -2, i);
+    }
+    
+    // Stringify the array
+    js_getglobal(J, "JSON");
+    js_getproperty(J, -1, "stringify");
+    js_copy(J, -3); // copy array
+    js_call(J, 1);
+    
+    std::string result = js_tostring(J, -1);
+    
+    // Clean up
+    while (js_gettop(J) > 0) js_pop(J, 1);
+    
+    return result;
 }

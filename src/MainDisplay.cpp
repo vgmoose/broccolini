@@ -2,6 +2,7 @@
 #include "MainDisplay.hpp"
 #include "WebView.hpp"
 #include "URLBar.hpp"
+#include "JSEngine.hpp"
 #include "../utils/Utils.hpp"
 #include <sys/stat.h>
 #include <filesystem>
@@ -31,26 +32,42 @@ MainDisplay::MainDisplay()
     // wipe out all files in the pviews directory if it exists
     cleanPrivateFiles();
 
-    // create some directory structures for favorites, history, and cache
+    // create some directory structures for favorites, history, cache, and domains
     mkdir("./data", 0777);
     mkdir("./data/favorites", 0777);
     mkdir("./data/views", 0777);
     mkdir("./data/pviews", 0777);
     mkdir("./data/cache", 0777);
+    mkdir("./data/domains", 0777);
 
-    // parse the favorites from json
-    std::map<std::string, void*> map;
-    parseJSON(readFile("./data/favorites.json"), map);
-
-    // // print each key and value in the map
-    for (auto const& x : map) {
-        if (x.first == "favorites") {
-            // our favorites array!
-            std::vector<std::string> favs = *(std::vector<std::string>*)x.second;
-            for (auto const& fav : favs) {
-                favorites.push_back(fav);
+    // parse the favorites from JSON using JSEngine directly
+    // TODO: move out / extract method
+    std::string favoritesContent = readFile("./data/favorites.json");
+    if (!favoritesContent.empty()) {
+        std::cout << "Attempting to parse favorites.json with JSEngine..." << std::endl;
+        
+        // pass a nullptr to use JSengine without a specific tab/webvie backing it
+        JSEngine jsonEngine(nullptr);
+        
+        if (jsonEngine.parseJSON(favoritesContent)) {
+            // extract the "favorites" array from the parsed JSON
+            // format is: {"favorites": ["url1", "url2", ...]}
+            std::vector<std::string> favs = jsonEngine.getArrayFromGlobal("parsedJSON", "favorites");
+            
+            if (!favs.empty()) {
+                favorites = favs;
+                std::cout << "Loaded " << favorites.size() << " favorites successfully using JSEngine!" << std::endl;
+            } else {
+                std::cout << "No favorites found in JSON or array is empty" << std::endl;
+                if (!jsonEngine.getLastError().empty()) {
+                    std::cout << "JSEngine error: " << jsonEngine.getLastError() << std::endl;
+                }
             }
+        } else {
+            std::cout << "Failed to parse favorites.json: " << jsonEngine.getLastError() << std::endl;
         }
+    } else {
+        std::cout << "No favorites.json file found or empty" << std::endl;
     }
 }
 
@@ -171,43 +188,82 @@ int MainDisplay::mainLoop()
 }
 
 std::string MainDisplay::fullSessionSummary() {
-    std::string ret = "{\n";
-    ret += "\t\"views\": [\n";
-
-    // summarize each tab (and its history)
-    for (int i = 0; i < allTabs.size(); i++) {
+    // Build JSON structure properly using muJS
+    js_State* J = js_newstate(NULL, NULL, JS_STRICT);
+    js_pushundefined(J);
+    js_pushundefined(J);
+    js_pushundefined(J);
+    js_pushglobal(J);
+    
+    // Create main object
+    js_newobject(J);
+    
+    // Create views array
+    js_newarray(J);
+    
+    // Add each webview
+    for (size_t i = 0; i < allTabs.size(); i++) {
         WebView* webView = allTabs[i];
-        ret += webView->fullSessionSummary();
-        ret += ",\n";
+        js_newobject(J);
+        
+        // Add properties
+        js_pushstring(J, webView->id.c_str());
+        js_setproperty(J, -2, "id");
+        
+        js_pushnumber(J, webView->historyIndex);
+        js_setproperty(J, -2, "urlIndex");
+        
+        // Add urls array
+        js_newarray(J);
+        for (size_t j = 0; j < webView->history.size(); j++) {
+            js_pushstring(J, webView->history[j].c_str());
+            js_setindex(J, -2, j);
+        }
+        js_setproperty(J, -2, "urls");
+        
+        // Set this view object in the views array
+        js_setindex(J, -2, i);
     }
-
-    // delete two characters (trailing newline and last comma)
-    ret = ret.substr(0, ret.size() - 2);
-
-    ret += "\n\t]\n";
-    ret += "}\n";
-
-    return ret;
+    
+    // Set views array in main object
+    js_setproperty(J, -2, "views");
+    
+    // Stringify the result
+    js_getglobal(J, "JSON");
+    js_getproperty(J, -1, "stringify");
+    js_copy(J, -3); // copy our object
+    js_call(J, 1);
+    
+    std::string result = js_tostring(J, -1);
+    js_freestate(J);
+    
+    return result;
 }
 
 std::string MainDisplay::favoritesSummary() {
-    std::string ret = "{\n";
-    ret += "\t\"favorites\": [\n";
-        
-    bool addedOne = false;
-    for (int i = 0; i < favorites.size(); i++) {
-        ret += "\t\t\"" + favorites[i] + "\",\n";
-        addedOne = true;
+    // Use JSEngine for JSON stringification instead of MuJSUtils
+    JSEngine jsonEngine(nullptr);
+    js_State* J = jsonEngine.getState();
+    
+    // Create main object
+    js_newobject(J);
+    
+    // Create favorites array
+    js_newarray(J);
+    for (size_t i = 0; i < favorites.size(); i++) {
+        js_pushstring(J, favorites[i].c_str());
+        js_setindex(J, -2, i);
     }
-
-    // delete two characters (trailing newline and last comma)
-    if (addedOne)
-        ret = ret.substr(0, ret.size() - 2);
-
-    ret += "\n\t]\n";
-    ret += "}\n";
-
-    return ret;
+    js_setproperty(J, -2, "favorites");
+    
+    // Stringify the result
+    js_getglobal(J, "JSON");
+    js_getproperty(J, -1, "stringify");
+    js_copy(J, -3); // copy our object
+    js_call(J, 1);
+    
+    std::string result = js_tostring(J, -1);
+    return result;
 }
 
 std::vector<WebView*>* MainDisplay::getAllTabs() {
@@ -248,26 +304,71 @@ void MainDisplay::goToStartPage() {
 }
 
 void MainDisplay::restoreTabs() {
-    // re-add the previously opened tabs as webviews
-    std::map<std::string, void*> map;
-    parseJSON(readFile("./data/views.json"), map);
-
-    auto curTabs = getAllTabs();
-
-    // print each key and value in the map
-    for (auto const& x : map) {
-        if (x.first == "views") {
-            auto views = *(std::vector<std::map<std::string, void*>>*)x.second;
-            for (auto const& view : views) {
-                auto newView = new WebView();
-                // auto idStr = *(std::string*)view["id"];
-                // auto urlIndex = *(int*)view["urlIndex"];
-                // auto urls = *(std::vector<std::string>*)view["urls"];
-                // newView->id = idStr;
-                // newView->historyIndex = urlIndex;
-                // newView->history = urls.copy();
-                curTabs->push_back(newView);
-            }
-        }
+    // re-add the previously opened tabs as webviews using JSEngine JSON parsing
+    std::string viewsContent = readFile("./data/views.json");
+    if (viewsContent.empty()) return;
+    
+    JSEngine jsonEngine(nullptr);
+    if (!jsonEngine.parseJSON(viewsContent)) {
+        std::cout << "Failed to parse views.json: " << jsonEngine.getLastError() << std::endl;
+        return;
     }
+    
+    js_State* J = jsonEngine.getState();
+    js_getglobal(J, "parsedJSON");
+    
+    if (!js_isobject(J, -1)) {
+        js_pop(J, 1);
+        return;
+    }
+    
+    // Get the "views" array
+    js_getproperty(J, -1, "views");
+    if (!js_isarray(J, -1)) {
+        js_pop(J, 2);
+        return;
+    }
+    
+    auto curTabs = getAllTabs();
+    int arrayLength = js_getlength(J, -1);
+    
+    for (int i = 0; i < arrayLength; i++) {
+        js_getindex(J, -1, i);
+        if (js_isobject(J, -1)) {
+            auto newView = new WebView();
+            
+            // Extract id
+            js_getproperty(J, -1, "id");
+            if (js_isstring(J, -1)) {
+                newView->id = js_tostring(J, -1);
+            }
+            js_pop(J, 1);
+            
+            // Extract urlIndex
+            js_getproperty(J, -1, "urlIndex");
+            if (js_isnumber(J, -1)) {
+                newView->historyIndex = js_tonumber(J, -1);
+            }
+            js_pop(J, 1);
+            
+            // Extract urls array
+            js_getproperty(J, -1, "urls");
+            if (js_isarray(J, -1)) {
+                int urlsLength = js_getlength(J, -1);
+                for (int j = 0; j < urlsLength; j++) {
+                    js_getindex(J, -1, j);
+                    if (js_isstring(J, -1)) {
+                        newView->history.push_back(js_tostring(J, -1));
+                    }
+                    js_pop(J, 1);
+                }
+            }
+            js_pop(J, 1); // pop urls array
+            
+            curTabs->push_back(newView);
+        }
+        js_pop(J, 1); // pop view object
+    }
+    
+    js_pop(J, 2); // pop views array and parsedJSON
 }

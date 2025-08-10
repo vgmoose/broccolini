@@ -1,6 +1,7 @@
 #include "VirtualDOM.hpp"
 #include "JSEngine.hpp"
 #include "WebView.hpp"
+#include "StorageManager.hpp"
 #include "../utils/BrocContainer.hpp"
 #include <litehtml.h>
 #include <iostream>
@@ -230,6 +231,13 @@ void VirtualDOM::js_createElement(js_State* J) {
     js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
     js_setproperty(J, -2, "updateTextContent");
     
+    // Add event listener methods
+    js_newcfunction(J, js_addEventListener, "addEventListener", 2);
+    js_setproperty(J, -2, "addEventListener");
+    
+    js_newcfunction(J, js_removeEventListener, "removeEventListener", 2);
+    js_setproperty(J, -2, "removeEventListener");
+    
     // Set up property interceptors for this element
     setupElementPropertySetters(J);
     
@@ -312,6 +320,13 @@ void VirtualDOM::js_getElementById(js_State* J) {
         // Add method that JavaScript can use for setting text content
         js_newcfunction(J, js_updateTextContent, "updateTextContent", 1);
         js_setproperty(J, -2, "updateTextContent");
+        
+        // Add event listener methods
+        js_newcfunction(J, js_addEventListener, "addEventListener", 2);
+        js_setproperty(J, -2, "addEventListener");
+        
+        js_newcfunction(J, js_removeEventListener, "removeEventListener", 2);
+        js_setproperty(J, -2, "removeEventListener");
         
         // Set up property interceptors for this element
         setupElementPropertySetters(J);
@@ -691,6 +706,31 @@ void VirtualDOM::setupWindowObject(js_State* J) {
     // Set up location object and add it to window
     setupLocationObject(J);
     
+    // Set up localStorage object and add it to window
+    js_newobject(J); // Create localStorage object
+    
+    // Add localStorage methods
+    js_newcfunction(J, js_localStorage_getItem, "getItem", 1);
+    js_setproperty(J, -2, "getItem");
+    
+    js_newcfunction(J, js_localStorage_setItem, "setItem", 2);
+    js_setproperty(J, -2, "setItem");
+    
+    js_newcfunction(J, js_localStorage_removeItem, "removeItem", 1);
+    js_setproperty(J, -2, "removeItem");
+    
+    js_newcfunction(J, js_localStorage_clear, "clear", 0);
+    js_setproperty(J, -2, "clear");
+    
+    js_newcfunction(J, js_localStorage_key, "key", 1);
+    js_setproperty(J, -2, "key");
+    
+    // Add localStorage length property (as a simple property for now)
+    js_pushnumber(J, 0);
+    js_setproperty(J, -2, "length");
+    
+    js_setproperty(J, -2, "localStorage"); // Add to window
+    
     // Set up window hierarchy (window.parent, etc.)
     setupWindowHierarchy(J);
     
@@ -713,6 +753,10 @@ void VirtualDOM::setupWindowObject(js_State* J) {
     js_getproperty(J, -1, "location");
     js_setglobal(J, "location");
     
+    // Make localStorage available globally
+    js_getproperty(J, -1, "localStorage");
+    js_setglobal(J, "localStorage");
+    
     js_pop(J, 1); // pop window object
     
     std::cout << "VirtualDOM: Window object created successfully" << std::endl;
@@ -727,6 +771,11 @@ void VirtualDOM::setupDocumentProperties(js_State* J) {
     js_newcfunction(J, js_documentTitleGetter, "get", 0); // getter at -2
     js_newcfunction(J, js_documentTitleSetter, "set", 1); // setter at -1
     js_defaccessor(J, -3, "title", 0); // object at -3
+    
+    // Set up document.cookie property with getter/setter
+    js_newcfunction(J, js_getCookies, "get", 0); // getter at -2
+    js_newcfunction(J, js_setCookie, "set", 1); // setter at -1
+    js_defaccessor(J, -3, "cookie", 0); // object at -3
     
     js_pop(J, 1); // pop document object
     
@@ -750,7 +799,7 @@ void VirtualDOM::js_locationHrefSetter(js_State* J) {
     VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
     if (vdom && vdom->webView && newUrl) {
         std::cout << "Navigating to: " << newUrl << std::endl;
-        vdom->webView->navigateToUrl(newUrl);
+        vdom->webView->goTo(newUrl);
     }
 }
 
@@ -770,7 +819,7 @@ void VirtualDOM::js_locationReplace(js_State* J) {
         // For replace(), we navigate but don't add to history
         // For simplicity, we'll use the same navigation method
         // In a full implementation, you'd modify history differently
-        vdom->webView->navigateToUrl(newUrl);
+        vdom->webView->goTo(newUrl);
     }
     
     js_pushundefined(J);
@@ -795,7 +844,7 @@ void VirtualDOM::js_locationAssign(js_State* J) {
     VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
     if (vdom && vdom->webView && newUrl) {
         std::cout << "Assigning location to: " << newUrl << std::endl;
-        vdom->webView->navigateToUrl(newUrl);
+        vdom->webView->goTo(newUrl);
     }
     
     js_pushundefined(J);
@@ -904,4 +953,240 @@ void VirtualDOM::js_documentTitleSetter(js_State* J) {
         std::cout << "Setting document title to: " << title << std::endl;
         vdom->webView->setTitle(title);
     }
+}
+
+// Event listener implementations
+void VirtualDOM::js_addEventListener(js_State* J) {
+    // Check argument count
+    int argc = js_gettop(J);
+    if (argc < 3) {  // 'this' + eventType + handler
+        std::cout << "addEventListener called with insufficient arguments" << std::endl;
+        return;
+    }
+    
+    // Get the event type
+    const char* eventType = js_tostring(J, 1);
+    if (!eventType) {
+        std::cout << "addEventListener: event type must be a string" << std::endl;
+        return;
+    }
+    
+    // Get the handler function or string
+    std::string handlerFunction;
+    bool isFunction = false;
+    
+    if (js_iscallable(J, 2)) {
+        // Function handler - convert to string representation for storage
+        // For now, we'll generate a unique function name and store the function
+        static int functionCounter = 0;
+        std::string funcName = "_eventHandler_" + std::to_string(++functionCounter);
+        
+        // Copy the function to the top of the stack, then store it globally
+        js_copy(J, 2);  // Copy the function
+        js_setglobal(J, funcName.c_str());
+        
+        handlerFunction = funcName;
+        isFunction = true;
+    } else if (js_isstring(J, 2)) {
+        // String handler (inline code)
+        handlerFunction = js_tostring(J, 2);
+        isFunction = false;
+    } else {
+        std::cout << "addEventListener: handler must be a function or string" << std::endl;
+        return;
+    }
+    
+    // Get the element's ID to find it in the DOM
+    js_getproperty(J, 0, "id");
+    const char* elementId = nullptr;
+    if (js_isstring(J, -1)) {
+        elementId = js_tostring(J, -1);
+    }
+    js_pop(J, 1);
+    
+    // Get VirtualDOM instance
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom || !vdom->webView || !vdom->webView->container) {
+        std::cout << "addEventListener: VirtualDOM or container not available" << std::endl;
+        return;
+    }
+    
+    // Find the litehtml element
+    litehtml::element::ptr element = nullptr;
+    if (elementId && strlen(elementId) > 0) {
+        element = vdom->findElementByIdInLiteHTML(elementId);
+    }
+    
+    if (!element) {
+        std::cout << "addEventListener: Could not find element with ID '" << (elementId ? elementId : "") << "'" << std::endl;
+        return;
+    }
+    
+    std::cout << "Adding event listener for '" << eventType << "' on element with ID '" << elementId << "'" << std::endl;
+    
+    // Add the event listener through BrocContainer
+    vdom->webView->container->addEventListener(element, eventType, handlerFunction, isFunction);
+}
+
+void VirtualDOM::js_removeEventListener(js_State* J) {
+    // Check argument count
+    int argc = js_gettop(J);
+    if (argc < 2) {  // 'this' + eventType
+        std::cout << "removeEventListener called with insufficient arguments" << std::endl;
+        return;
+    }
+    
+    // Get the event type
+    const char* eventType = js_tostring(J, 1);
+    if (!eventType) {
+        std::cout << "removeEventListener: event type must be a string" << std::endl;
+        return;
+    }
+    
+    // Get optional handler function (if provided)
+    std::string handlerFunction = "";
+    if (argc >= 3 && js_isstring(J, 2)) {
+        handlerFunction = js_tostring(J, 2);
+    }
+    
+    // Get the element's ID to find it in the DOM
+    js_getproperty(J, 0, "id");
+    const char* elementId = nullptr;
+    if (js_isstring(J, -1)) {
+        elementId = js_tostring(J, -1);
+    }
+    js_pop(J, 1);
+    
+    // Get VirtualDOM instance
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom || !vdom->webView || !vdom->webView->container) {
+        std::cout << "removeEventListener: VirtualDOM or container not available" << std::endl;
+        return;
+    }
+    
+    // Find the litehtml element
+    litehtml::element::ptr element = nullptr;
+    if (elementId && strlen(elementId) > 0) {
+        element = vdom->findElementByIdInLiteHTML(elementId);
+    }
+    
+    if (!element) {
+        std::cout << "removeEventListener: Could not find element with ID '" << (elementId ? elementId : "") << "'" << std::endl;
+        return;
+    }
+    
+    std::cout << "Removing event listener for '" << eventType << "' on element with ID '" << elementId << "'" << std::endl;
+    
+    // Remove the event listener through BrocContainer
+    vdom->webView->container->removeEventListener(element, eventType, handlerFunction);
+}
+
+// Cookie Storage JavaScript APIs
+void VirtualDOM::js_getCookies(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        js_pushstring(J, "");
+        return;
+    }
+    
+    std::string cookies = StorageManager::getInstance().getAllCookiesAsString();
+    js_pushstring(J, cookies.c_str());
+}
+
+void VirtualDOM::js_setCookie(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        return;
+    }
+    
+    if (js_isstring(J, 1)) {
+        std::string cookieString = js_tostring(J, 1);
+        StorageManager::getInstance().setCookieFromString(cookieString);
+    }
+}
+
+// localStorage JavaScript APIs
+void VirtualDOM::js_localStorage_getItem(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        js_pushnull(J);
+        return;
+    }
+    
+    if (js_isstring(J, 1)) {
+        std::string key = js_tostring(J, 1);
+        std::string value = StorageManager::getInstance().getLocalStorageItem(key);
+        if (value.empty()) {
+            js_pushnull(J);
+        } else {
+            js_pushstring(J, value.c_str());
+        }
+    } else {
+        js_pushnull(J);
+    }
+}
+
+void VirtualDOM::js_localStorage_setItem(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        return;
+    }
+    
+    if (js_isstring(J, 1) && js_isstring(J, 2)) {
+        std::string key = js_tostring(J, 1);
+        std::string value = js_tostring(J, 2);
+        StorageManager::getInstance().setLocalStorageItem(key, value);
+    }
+}
+
+void VirtualDOM::js_localStorage_removeItem(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        return;
+    }
+    
+    if (js_isstring(J, 1)) {
+        std::string key = js_tostring(J, 1);
+        StorageManager::getInstance().removeLocalStorageItem(key);
+    }
+}
+
+void VirtualDOM::js_localStorage_clear(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        return;
+    }
+    
+    StorageManager::getInstance().clearLocalStorage();
+}
+
+void VirtualDOM::js_localStorage_key(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        js_pushnull(J);
+        return;
+    }
+    
+    if (js_isnumber(J, 1)) {
+        int index = js_tonumber(J, 1);
+        std::string key = StorageManager::getInstance().getLocalStorageKey(index);
+        if (key.empty()) {
+            js_pushnull(J);
+        } else {
+            js_pushstring(J, key.c_str());
+        }
+    } else {
+        js_pushnull(J);
+    }
+}
+
+void VirtualDOM::js_localStorage_length(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (!vdom) {
+        js_pushnumber(J, 0);
+        return;
+    }
+    
+    int length = StorageManager::getInstance().getLocalStorageLength();
+    js_pushnumber(J, length);
 }

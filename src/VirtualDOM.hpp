@@ -98,6 +98,22 @@ private:
     static void js_appendChild(js_State* J);
     static void js_updateTextContent(js_State* J);
     
+    // Event listener methods
+    static void js_addEventListener(js_State* J);
+    static void js_removeEventListener(js_State* J);
+    
+    // Storage methods - Cookies
+    static void js_getCookies(js_State* J);
+    static void js_setCookie(js_State* J);
+    
+    // Storage methods - localStorage
+    static void js_localStorage_getItem(js_State* J);
+    static void js_localStorage_setItem(js_State* J);
+    static void js_localStorage_removeItem(js_State* J);
+    static void js_localStorage_clear(js_State* J);
+    static void js_localStorage_key(js_State* J);
+    static void js_localStorage_length(js_State* J);
+    
     // Property setter system
     static void setupElementPropertySetters(js_State* J);
     static void setupWindowObject(js_State* J);

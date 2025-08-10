@@ -9,6 +9,7 @@
 #include "../libs/litehtml/include/litehtml/render_item.h"
 #include <sstream>
 #include <iostream>
+#include <algorithm>
 
 // This class implements the litehtml::document_container interface.
 // And hooks up litehtml methods to SDL/Chesto methods.
@@ -348,6 +349,15 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
         return;
     }
 
+    // BUG? check if border sizes are at least 1, because sometimes is_visible returns true even for all 0 sizes
+    bool is_visible = fabs(borders.left.width) >= 1 || fabs(borders.right.width) >= 1 ||
+                   fabs(borders.top.width) >= 1 || fabs(borders.bottom.width) >= 1;
+
+    if (!is_visible) {
+        return;
+    }
+
+    // print border sizes
     CST_Rect dimens = {
         draw_pos.left(),
         draw_pos.top(),
@@ -651,9 +661,238 @@ void BrocContainer::cleanupChestoLinks() {
     std::cout << "Link overlays removed from webView (Chesto will handle cleanup)" << std::endl;
 }
 
+// Event listener support methods
+void BrocContainer::addEventListener(const litehtml::element::ptr& element, const std::string& eventType, const std::string& jsFunction, bool isFunction) {
+    if (!element) return;
+    
+    std::cout << "Adding event listener for " << eventType << " on element" << std::endl;
+    
+    EventListener listener;
+    listener.eventType = eventType;
+    listener.jsFunction = jsFunction;
+    listener.isFunction = isFunction;
+    
+    eventListeners[element].push_back(listener);
+    
+    // If this is a click event and we don't have an overlay yet, create one
+    if (eventType == "click" && eventOverlayRegistry.find(element) == eventOverlayRegistry.end()) {
+        createChestoEventOverlayFromElement(element);
+    }
+}
+
+void BrocContainer::removeEventListener(const litehtml::element::ptr& element, const std::string& eventType, const std::string& jsFunction) {
+    if (!element) return;
+    
+    auto it = eventListeners.find(element);
+    if (it == eventListeners.end()) return;
+    
+    auto& listeners = it->second;
+    
+    // Remove matching listeners
+    listeners.erase(
+        std::remove_if(listeners.begin(), listeners.end(),
+            [&](const EventListener& listener) {
+                return listener.eventType == eventType && 
+                       (jsFunction.empty() || listener.jsFunction == jsFunction);
+            }),
+        listeners.end()
+    );
+    
+    // If no listeners left for this element, remove the overlay and registry entry
+    if (listeners.empty()) {
+        auto overlayIt = eventOverlayRegistry.find(element);
+        if (overlayIt != eventOverlayRegistry.end()) {
+            webView->remove(overlayIt->second);
+            eventOverlayRegistry.erase(overlayIt);
+        }
+        eventListeners.erase(it);
+    }
+    // If no click listeners left, remove the overlay
+    else {
+        bool hasClickListeners = std::any_of(listeners.begin(), listeners.end(),
+            [](const EventListener& listener) {
+                return listener.eventType == "click";
+            });
+        
+        if (!hasClickListeners) {
+            auto overlayIt = eventOverlayRegistry.find(element);
+            if (overlayIt != eventOverlayRegistry.end()) {
+                webView->remove(overlayIt->second);
+                eventOverlayRegistry.erase(overlayIt);
+            }
+        }
+    }
+}
+
+void BrocContainer::executeEventListeners(const litehtml::element::ptr& element, const std::string& eventType) {
+    if (!element || !webView || !webView->jsEngine) return;
+    
+    auto it = eventListeners.find(element);
+    if (it == eventListeners.end()) return;
+    
+    std::cout << "Executing " << eventType << " event listeners for element" << std::endl;
+    
+    for (const auto& listener : it->second) {
+        if (listener.eventType == eventType) {
+            if (listener.isFunction) {
+                // Execute as a function call
+                std::string script = "(" + listener.jsFunction + ")();";
+                webView->jsEngine->executeScript(script);
+            } else {
+                // Execute as inline code
+                webView->jsEngine->executeScript(listener.jsFunction);
+            }
+        }
+    }
+}
+
+void BrocContainer::createChestoEventListenersFromHTML() {
+    if (!webView || !webView->m_doc || chestoEventListenersCreated || navigationInProgress) {
+        return;
+    }
+    
+    // std::cout << "Creating Chesto event listener overlays..." << std::endl;
+    
+    bool createdAnyOverlays = false;
+    
+    // Check all elements that have event listeners
+    for (const auto& pair : eventListeners) {
+        const auto& element = pair.first;
+        const auto& listeners = pair.second;
+        
+        // Check if this element has any click listeners
+        bool hasClickListeners = std::any_of(listeners.begin(), listeners.end(),
+            [](const EventListener& listener) {
+                return listener.eventType == "click";
+            });
+        
+        if (hasClickListeners && eventOverlayRegistry.find(element) == eventOverlayRegistry.end()) {
+            // Check if this element is already handled by button or link overlays
+            bool alreadyHandled = false;
+            
+            // Check if it's in button registry
+            if (buttonRegistry.find(element) != buttonRegistry.end()) {
+                alreadyHandled = true;
+                std::cout << "Element already has button overlay, enhancing with event listeners" << std::endl;
+                // Enhance existing button overlay with event listener functionality
+                auto existingOverlay = buttonRegistry[element];
+                enhanceOverlayWithEventListeners(existingOverlay, element);
+            }
+            
+            // Check if it's in link registry
+            if (linkRegistry.find(element) != linkRegistry.end()) {
+                alreadyHandled = true;
+                std::cout << "Element already has link overlay, enhancing with event listeners" << std::endl;
+                // Enhance existing link overlay with event listener functionality
+                auto existingOverlay = linkRegistry[element];
+                enhanceOverlayWithEventListeners(existingOverlay, element);
+            }
+            
+            // If not already handled, create a new overlay
+            if (!alreadyHandled && createChestoEventOverlayFromElement(element)) {
+                createdAnyOverlays = true;
+            } else if (alreadyHandled) {
+                createdAnyOverlays = true;
+            }
+        }
+    }
+    
+    if (createdAnyOverlays) {
+        chestoEventListenersCreated = true;
+        std::cout << "Event listener overlays created successfully" << std::endl;
+    }
+}
+
+void BrocContainer::enhanceOverlayWithEventListeners(Element* overlay, const litehtml::element::ptr& element) {
+    if (!overlay || !element) {
+        return;
+    }
+    
+    // Store the existing action (if any) so we can chain them
+    auto existingAction = overlay->action;
+    
+    // Create a new action that executes both the original action and event listeners
+    overlay->action = [this, element, existingAction]() {
+        std::cout << "Enhanced overlay clicked for element!" << std::endl;
+        
+        // Execute the original action first (button click or link navigation)
+        if (existingAction) {
+            existingAction();
+        }
+        
+        // Then execute any addEventListener handlers
+        executeEventListeners(element, "click");
+    };
+    
+    // Register this overlay in the event registry as well
+    eventOverlayRegistry[element] = overlay;
+    
+    std::cout << "Enhanced existing overlay with event listeners" << std::endl;
+}
+
+bool BrocContainer::createChestoEventOverlayFromElement(const litehtml::element::ptr& element) {
+    if (!element) return false;
+    
+    // Get element position using get_placement()
+    litehtml::position placement = element->get_placement();
+    
+    if (placement.width <= 0 || placement.height <= 0) {
+        std::cout << "Element has no dimensions (w:" << placement.width << " h:" << placement.height << "), skipping overlay" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Creating event listener overlay at (" << placement.x << ", " << placement.y 
+              << ") with size " << placement.width << "x" << placement.height << std::endl;
+    
+    // Create invisible Element overlay 
+    Element* overlay = new Element();
+    
+    // Set dimensions and make it touchable but invisible
+    overlay->width = placement.width;
+    overlay->height = placement.height;
+    overlay->touchable = true;
+    overlay->hidden = false;
+    overlay->hasBackground = false;
+    
+    // Position the overlay over the HTML element
+    overlay->position(placement.x, placement.y);
+    
+    // Set up the click callback to execute all click event listeners
+    overlay->action = [this, element]() {
+        std::cout << "Event listener overlay clicked!" << std::endl;
+        this->executeEventListeners(element, "click");
+    };
+    
+    // Add overlay to webView as a child
+    webView->child(overlay);
+    
+    // Store in registry for cleanup later
+    eventOverlayRegistry[element] = overlay;
+    
+    return true;
+}
+
+void BrocContainer::cleanupChestoEventListeners() {
+    std::cout << "Starting cleanup of event listener overlays..." << std::endl;
+    
+    // Remove overlays from webView's children list and clear registry
+    for (auto& pair : eventOverlayRegistry) {
+        Element* overlay = pair.second;
+        if (overlay) {
+            std::cout << "Removing event listener overlay from webView..." << std::endl;
+            webView->remove(overlay);
+        }
+    }
+    eventOverlayRegistry.clear();
+    eventListeners.clear();
+    chestoEventListenersCreated = false;
+    std::cout << "Event listener overlays removed from webView (Chesto will handle cleanup)" << std::endl;
+}
+
 void BrocContainer::cleanupAllOverlays() {
     cleanupChestoButtons();
     cleanupChestoLinks();
+    cleanupChestoEventListeners();
 }
 
 void BrocContainer::createChestoButtonsFromHTML() {
@@ -661,7 +900,7 @@ void BrocContainer::createChestoButtonsFromHTML() {
         return; // Skip if already created, no document, or navigation in progress
     }
     
-    std::cout << "Creating Chesto buttons from HTML button elements..." << std::endl;
+    // std::cout << "Creating Chesto buttons from HTML button elements..." << std::endl;
     
     // Find all button elements in the document
     auto root = webView->m_doc->root();
@@ -673,7 +912,7 @@ void BrocContainer::createChestoButtonsFromHTML() {
     // Use litehtml's select_all method to find all button elements
     litehtml::elements_list button_elements = root->select_all("button");
     
-    std::cout << "Found " << button_elements.size() << " button elements" << std::endl;
+    // std::cout << "Found " << button_elements.size() << " button elements" << std::endl;
     
     bool createdAnyButtons = false;
     for (auto& html_button : button_elements) {
@@ -822,47 +1061,84 @@ bool BrocContainer::createChestoLinkFromElement(const litehtml::element::ptr& ht
         
         // Store in registry for cleanup later
         linkRegistry[html_link] = overlay;
+        std::cout << "Positioned invisible overlay at (" << placement.x << ", " << placement.y 
+                  << ") with size " << placement.width << "x" << placement.height << std::endl;
         return true;
     }
 
     // continuing to use old render method (still uses invisible overlays)
+    if (!draw_areas.empty()) {
+        for (auto area : draw_areas) {
+            auto pos = std::get<0>(area);
+            auto sz  = std::get<1>(area);
 
-    for (auto area : draw_areas) {
-        auto pos = std::get<0>(area);
-        auto sz  = std::get<1>(area);
+            auto pos_x = webView->x + pos.x;
+            auto pos_y = webView->y + pos.y;
 
-        auto pos_x = webView->x + pos.x;
-        auto pos_y = webView->y + pos.y;
+            // Create invisible Element overlay 
+            // TODO: was copypasta'd from above (need a generic one line way to make quick overlays)
+            Element* overlay = new Element();
+            overlay->width = sz.width;
+            overlay->height = sz.height;
+            overlay->touchable = true;
+            overlay->hidden = false;  // Not hidden, just no background
+            overlay->hasBackground = false;  // No background = invisible
+            
+            // Position the overlay over the HTML link
+            overlay->position(pos.x, pos.y);
 
-        // Create invisible Element overlay 
-        // TODO: was copypasta'd from above (need a generic one line way to make quick overlays)
+            // Set up the click callback
+            overlay->action = [this, html_link]() {
+                std::cout << "Invisible overlay clicked for link!" << std::endl;
+                this->handleLinkClick(html_link);
+            };
+            
+            // Add overlay to webView as a child
+            webView->child(overlay);
+            
+            // Store in registry for cleanup later
+            linkRegistry[html_link] = overlay;
+
+            std::cout << "Created invisible link overlay at (" << pos.x << ", " << pos.y
+                    << ") with size " << sz.width << "x" << sz.height << std::endl;
+        }
+        return true;
+    }
+
+    // if we're down here, we have no placement, and no draw areas, so what do we do?
+    // maybe look at the border data (and assume that it's a containing element)
+    litehtml::size contentSize;
+    html_link->get_content_size(contentSize, RootDisplay::screenWidth);
+    if (contentSize.width > 0 && contentSize.height > 0) {
+        std::cout << "Using content size for link overlay: " << contentSize.width << "x" << contentSize.height << std::endl;
         Element* overlay = new Element();
-        overlay->width = sz.width;
-        overlay->height = sz.height;
+        overlay->width = contentSize.width;
+        overlay->height = contentSize.height;
         overlay->touchable = true;
         overlay->hidden = false;  // Not hidden, just no background
         overlay->hasBackground = false;  // No background = invisible
         
-        // Position the overlay over the HTML link
-        overlay->position(pos.x, pos.y);
-
+        // try to use placement data anyway
+        overlay->position(placement.x, placement.y);
         // Set up the click callback
         overlay->action = [this, html_link]() {
             std::cout << "Invisible overlay clicked for link!" << std::endl;
             this->handleLinkClick(html_link);
         };
-        
+
         // Add overlay to webView as a child
         webView->child(overlay);
-        
+
         // Store in registry for cleanup later
         linkRegistry[html_link] = overlay;
-
-        std::cout << "Created invisible link overlay at (" << pos.x << ", " << pos.y
-                  << ") with size " << sz.width << "x" << sz.height << std::endl;
+        std::cout << "FALLBACK: Created invisible link overlay at (" << placement.x << ", " << placement.y 
+                  << ") with size " << contentSize.width << "x" << contentSize.height << std::endl;
+        return true;
     }
+
+    std::cout << "No valid placement or draw areas for link, skipping overlay creation" << std::endl;
     
-    return true;
+    return false;
 }
 
 void BrocContainer::handleLinkClick(const litehtml::element::ptr& link_element) {
