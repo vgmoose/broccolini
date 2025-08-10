@@ -776,6 +776,7 @@ bool BrocContainer::createChestoButtonFromElement(const litehtml::element::ptr& 
 }
 
 bool BrocContainer::createChestoLinkFromElement(const litehtml::element::ptr& html_link) {
+    // TODO: copypasta'd from Button creation above, very similar / consolidate
     if (!html_link) return false;
     
     // Get the href attribute
@@ -794,44 +795,72 @@ bool BrocContainer::createChestoLinkFromElement(const litehtml::element::ptr& ht
     
     std::cout << "Creating invisible overlay for link: '" << linkText << "' -> " << href << std::endl;
     
-    // Get the link's position using get_placement()
-    litehtml::position placement = html_link->get_placement();
-    
-    if (placement.width <= 0 || placement.height <= 0) {
-        std::cout << "Link has no dimensions (w:" << placement.width << " h:" << placement.height << "), skipping" << std::endl;
-        return false;
+    // create multiple buttons surrounding the render areas for this element
+    auto draw_areas = get_draw_areas(html_link->m_renders);
+
+    // if the position/size info is zero, use direct render data instead (why?)
+    auto placement = html_link->get_placement();
+    if (placement.width > 0 && placement.height > 0) {
+        Element* overlay = new Element();
+        overlay->width = placement.width;
+        overlay->height = placement.height;
+        overlay->touchable = true;
+        overlay->hidden = false;  // Not hidden, just no background
+        overlay->hasBackground = false;  // No background = invisible
+        
+        // Position the overlay over the HTML link
+        overlay->position(placement.x, placement.y);
+
+        // Set up the click callback
+        overlay->action = [this, html_link]() {
+            std::cout << "Invisible overlay clicked for link!" << std::endl;
+            this->handleLinkClick(html_link);
+        };
+        
+        // Add overlay to webView as a child
+        webView->child(overlay);
+        
+        // Store in registry for cleanup later
+        linkRegistry[html_link] = overlay;
+        return true;
     }
-    
-    std::cout << "Link placement: x=" << placement.x << " y=" << placement.y 
-              << " w=" << placement.width << " h=" << placement.height << std::endl;
-    
-    // Create invisible Element overlay 
-    Element* overlay = new Element();
-    
-    // Set dimensions and make it touchable but invisible
-    overlay->width = placement.width;
-    overlay->height = placement.height;
-    overlay->touchable = true;
-    overlay->hidden = false;  // Not hidden, just no background
-    overlay->hasBackground = false;  // No background = invisible
-    
-    // Position the overlay over the HTML link
-    overlay->position(placement.x, placement.y);
-    
-    // Set up the click callback
-    overlay->action = [this, html_link]() {
-        std::cout << "Invisible overlay clicked for link!" << std::endl;
-        this->handleLinkClick(html_link);
-    };
-    
-    // Add overlay to webView as a child
-    webView->child(overlay);
-    
-    // Store in registry for cleanup later
-    linkRegistry[html_link] = overlay;
-    
-    std::cout << "Created invisible link overlay at (" << placement.x << ", " << placement.y 
-              << ") with size " << placement.width << "x" << placement.height << std::endl;
+
+    // continuing to use old render method (still uses invisible overlays)
+
+    for (auto area : draw_areas) {
+        auto pos = std::get<0>(area);
+        auto sz  = std::get<1>(area);
+
+        auto pos_x = webView->x + pos.x;
+        auto pos_y = webView->y + pos.y;
+
+        // Create invisible Element overlay 
+        // TODO: was copypasta'd from above (need a generic one line way to make quick overlays)
+        Element* overlay = new Element();
+        overlay->width = sz.width;
+        overlay->height = sz.height;
+        overlay->touchable = true;
+        overlay->hidden = false;  // Not hidden, just no background
+        overlay->hasBackground = false;  // No background = invisible
+        
+        // Position the overlay over the HTML link
+        overlay->position(pos.x, pos.y);
+
+        // Set up the click callback
+        overlay->action = [this, html_link]() {
+            std::cout << "Invisible overlay clicked for link!" << std::endl;
+            this->handleLinkClick(html_link);
+        };
+        
+        // Add overlay to webView as a child
+        webView->child(overlay);
+        
+        // Store in registry for cleanup later
+        linkRegistry[html_link] = overlay;
+
+        std::cout << "Created invisible link overlay at (" << pos.x << ", " << pos.y
+                  << ") with size " << sz.width << "x" << sz.height << std::endl;
+    }
     
     return true;
 }
