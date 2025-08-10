@@ -592,25 +592,15 @@ VirtualDOM* VirtualDOM::getVirtualDOMFromJS(js_State* J, int idx) {
 
 // Property setter system implementation
 void VirtualDOM::setupElementPropertySetters(js_State* J) {
-    // Set up textContent property with getter/setter
-    js_newobject(J); // descriptor object
-    js_newcfunction(J, js_textContentGetter, "get", 0);
-    js_setproperty(J, -2, "get");
-    js_newcfunction(J, js_textContentSetter, "set", 1);
-    js_setproperty(J, -2, "set");
-    js_pushboolean(J, 1); // enumerable
-    js_setproperty(J, -2, "enumerable");
-    js_defproperty(J, -2, "textContent", 0);
+    // Set up textContent property with getter/setter using js_defaccessor
+    js_newcfunction(J, js_textContentGetter, "get", 0); // getter at -2
+    js_newcfunction(J, js_textContentSetter, "set", 1); // setter at -1
+    js_defaccessor(J, -3, "textContent", 0); // object at -3
     
-    // Set up innerHTML property with getter/setter
-    js_newobject(J); // descriptor object
-    js_newcfunction(J, js_innerHTMLGetter, "get", 0);
-    js_setproperty(J, -2, "get");
-    js_newcfunction(J, js_innerHTMLSetter, "set", 1);
-    js_setproperty(J, -2, "set");
-    js_pushboolean(J, 1); // enumerable
-    js_setproperty(J, -2, "enumerable");
-    js_defproperty(J, -2, "innerHTML", 0);
+    // Set up innerHTML property with getter/setter using js_defaccessor
+    js_newcfunction(J, js_innerHTMLGetter, "get", 0); // getter at -2
+    js_newcfunction(J, js_innerHTMLSetter, "set", 1); // setter at -1
+    js_defaccessor(J, -3, "innerHTML", 0); // object at -3
 }
 
 void VirtualDOM::setupWindowObject(js_State* J) {
@@ -637,6 +627,15 @@ void VirtualDOM::setupWindowObject(js_State* J) {
     // Set window as global
     js_setglobal(J, "window");
     
+    // Now set window properties as globals for convenience
+    std::cout << "VirtualDOM: Setting up global window properties" << std::endl;
+    
+    // Make alert available globally
+    js_getglobal(J, "window");
+    js_getproperty(J, -1, "alert");
+    js_setglobal(J, "alert");
+    js_pop(J, 1); // pop window object
+    
     std::cout << "VirtualDOM: Window object created successfully" << std::endl;
 }
 
@@ -645,15 +644,10 @@ void VirtualDOM::setupDocumentProperties(js_State* J) {
     
     js_getglobal(J, "document");
     
-    // Set up document.title property with getter/setter
-    js_newobject(J); // descriptor object
-    js_newcfunction(J, js_documentTitleGetter, "get", 0);
-    js_setproperty(J, -2, "get");
-    js_newcfunction(J, js_documentTitleSetter, "set", 1);
-    js_setproperty(J, -2, "set");
-    js_pushboolean(J, 1); // enumerable
-    js_setproperty(J, -2, "enumerable");
-    js_defproperty(J, -2, "title", 0);
+    // Set up document.title property with getter/setter using js_defaccessor
+    js_newcfunction(J, js_documentTitleGetter, "get", 0); // getter at -2
+    js_newcfunction(J, js_documentTitleSetter, "set", 1); // setter at -1
+    js_defaccessor(J, -3, "title", 0); // object at -3
     
     js_pop(J, 1); // pop document object
     
@@ -747,8 +741,7 @@ void VirtualDOM::js_documentTitleGetter(js_State* J) {
     // Get current document title from WebView
     VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
     if (vdom && vdom->webView) {
-        // For now, return a placeholder - you can implement title storage in WebView
-        js_pushstring(J, "Broccolini Browser");
+        js_pushstring(J, vdom->webView->windowTitle.c_str());
     } else {
         js_pushstring(J, "");
     }
@@ -761,8 +754,7 @@ void VirtualDOM::js_documentTitleSetter(js_State* J) {
     // Get VirtualDOM instance and update title
     VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
     if (vdom && vdom->webView) {
-        // You can implement setTitle in WebView class
         std::cout << "Setting document title to: " << title << std::endl;
-        // vdom->webView->setTitle(title); // Implement this in WebView
+        vdom->webView->setTitle(title);
     }
 }

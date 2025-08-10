@@ -366,8 +366,11 @@ void BrocContainer::draw_borders(litehtml::uint_ptr hdc, const litehtml::borders
 
 void BrocContainer::set_caption(const char* caption ) {
     // std::cout << "Setting caption to: " << caption << std::endl;
-    webView->windowTitle = caption;
-    CST_SetWindowTitle(caption);
+    // Only set title from HTML if it hasn't been set dynamically via JavaScript
+    if (!webView->titleSetDynamically) {
+        webView->setTitle(caption);
+        webView->titleSetDynamically = false; // Reset flag since this was from HTML parsing
+    }
 }
 
 void BrocContainer::set_base_url(const char* base_url ) {

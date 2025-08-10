@@ -314,6 +314,9 @@ void WebView::downloadPage()
 
     // reset the theme color
     this->theme_color = { 0xdd, 0xdd, 0xdd, 0xff };
+    
+    // reset the dynamic title flag for new page loads
+    this->titleSetDynamically = false;
 
     container = new BrocContainer(this);
     // printf("Resetting container\n");
@@ -499,4 +502,11 @@ void WebView::recreateDocument() {
     std::cout << "Successfully recreated litehtml document from modified contents" << std::endl;
     
     // Do NOT execute page scripts again as that would cause infinite loops
+}
+
+void WebView::setTitle(const std::string& title) {
+    this->windowTitle = title;
+    this->titleSetDynamically = true;  // Mark as dynamically set
+    std::cout << "Setting WebView title to: " << title << std::endl;
+    CST_SetWindowTitle(title.c_str());
 }

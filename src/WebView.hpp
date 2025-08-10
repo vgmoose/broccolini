@@ -47,6 +47,9 @@ public:
     // the "next" url to load if a touch event is successful (receives down and up with no movement in between)
     std::string nextLinkHref = "";
     std::string windowTitle = "";
+    
+    // Flag to track if title was set dynamically (to prevent HTML <title> from overriding)
+    bool titleSetDynamically = false;
 
     // a unique ID that identifies this view, used by caches
     std::string id = "";
@@ -76,5 +79,7 @@ public:
     
     // Method to recreate document from modified contents
     void recreateDocument();
+
+    void setTitle(const std::string& title);
 };
 #endif // WEBVIEW_H
