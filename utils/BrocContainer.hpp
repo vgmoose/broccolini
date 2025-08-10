@@ -6,6 +6,7 @@
 #include <litehtml.h>
 
 #include "../libs/chesto/src/NetImageElement.hpp"
+#include "../libs/chesto/src/Element.hpp"
 #include "../src/WebView.hpp"
 
 class BrocContainer : public litehtml::document_container
@@ -24,6 +25,15 @@ public:
 
     // create a map to store all images on the page
     std::map<std::string, Texture*> imageCache;
+    
+    // create a map to store HTML buttons mapped to invisible Chesto Element overlays
+    std::map<litehtml::element::ptr, Element*> buttonRegistry;
+    
+    // Flag to prevent repeated button creation
+    bool chestoButtonsCreated = false;
+    
+    // Flag to prevent button creation during navigation to avoid cleanup issues
+    bool navigationInProgress = false;
 
     std::string resolve_url(const char* src, const char* baseurl);
 
@@ -62,6 +72,13 @@ public:
     virtual void del_clip( ) override;
     virtual void get_viewport(litehtml::position& viewport ) const override;
     virtual std::shared_ptr<litehtml::element> create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) override;
+    
+    // Button support methods
+    void handleButtonClick(const litehtml::element::ptr& button_element);
+    void executeJavaScriptOnClick(const litehtml::element::ptr& element);
+    void createChestoButtonsFromHTML();
+    bool createChestoButtonFromElement(const litehtml::element::ptr& html_button);
+    void cleanupChestoButtons();
     virtual void get_media_features(litehtml::media_features& media ) const override;
     virtual void get_language(litehtml::string& language, litehtml::string & culture ) const override;
 };

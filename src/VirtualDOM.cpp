@@ -1,6 +1,7 @@
 #include "VirtualDOM.hpp"
 #include "JSEngine.hpp"
 #include "WebView.hpp"
+#include "../utils/BrocContainer.hpp"
 #include <litehtml.h>
 #include <iostream>
 
@@ -590,6 +591,53 @@ VirtualDOM* VirtualDOM::getVirtualDOMFromJS(js_State* J, int idx) {
     return nullptr;
 }
 
+// Location object setup
+void VirtualDOM::setupLocationObject(js_State* J) {
+    std::cout << "VirtualDOM: Setting up location object" << std::endl;
+    
+    // Create location object
+    js_newobject(J);
+    
+    // Set up href property with getter/setter
+    js_newcfunction(J, js_locationHrefGetter, "get", 0); 
+    js_newcfunction(J, js_locationHrefSetter, "set", 1); 
+    js_defaccessor(J, -3, "href", 0); 
+    
+    // Add location methods
+    js_newcfunction(J, js_locationReplace, "replace", 1);
+    js_setproperty(J, -2, "replace");
+    
+    js_newcfunction(J, js_locationReload, "reload", 0);
+    js_setproperty(J, -2, "reload");
+    
+    js_newcfunction(J, js_locationAssign, "assign", 1);
+    js_setproperty(J, -2, "assign");
+    
+    // Set location in window (assuming window is at -2)
+    js_setproperty(J, -2, "location");
+    
+    std::cout << "VirtualDOM: Location object created successfully" << std::endl;
+}
+
+void VirtualDOM::setupWindowHierarchy(js_State* J) {
+    std::cout << "VirtualDOM: Setting up window hierarchy" << std::endl;
+    
+    // For a simple browser, window.parent should reference the same window
+    // (unless we're in a frame, which we'll handle later)
+    
+    // Get reference to the window object (should be at -1)
+    js_copy(J, -1); // duplicate window object
+    js_setproperty(J, -2, "parent"); // window.parent = window
+    
+    js_copy(J, -1); // duplicate window object again
+    js_setproperty(J, -2, "top"); // window.top = window
+    
+    js_copy(J, -1); // duplicate window object again
+    js_setproperty(J, -2, "self"); // window.self = window
+    
+    std::cout << "VirtualDOM: Window hierarchy set up successfully" << std::endl;
+}
+
 // Property setter system implementation
 void VirtualDOM::setupElementPropertySetters(js_State* J) {
     // Set up textContent property with getter/setter using js_defaccessor
@@ -620,9 +668,31 @@ void VirtualDOM::setupWindowObject(js_State* J) {
     }, "alert", 1);
     js_setproperty(J, -2, "alert");
     
+    // Add setTimeout function
+    js_newcfunction(J, [](js_State *J) {
+        // Simple setTimeout implementation - just execute the function immediately
+        // In a real implementation, you'd schedule this with a timer
+        if (js_iscallable(J, 1)) {
+            std::cout << "setTimeout called - executing immediately (simplified implementation)" << std::endl;
+            js_copy(J, 1); // copy the function
+            js_call(J, 0); // call it with no arguments
+            js_pop(J, 1); // pop the result
+        } else {
+            std::cout << "setTimeout called with non-callable first argument" << std::endl;
+        }
+        js_pushundefined(J);
+    }, "setTimeout", 2);
+    js_setproperty(J, -2, "setTimeout");
+    
     // Add console reference to window
     js_getglobal(J, "console");
     js_setproperty(J, -2, "console");
+    
+    // Set up location object and add it to window
+    setupLocationObject(J);
+    
+    // Set up window hierarchy (window.parent, etc.)
+    setupWindowHierarchy(J);
     
     // Set window as global
     js_setglobal(J, "window");
@@ -634,6 +704,15 @@ void VirtualDOM::setupWindowObject(js_State* J) {
     js_getglobal(J, "window");
     js_getproperty(J, -1, "alert");
     js_setglobal(J, "alert");
+    
+    // Make setTimeout available globally
+    js_getproperty(J, -1, "setTimeout");
+    js_setglobal(J, "setTimeout");
+    
+    // Make location available globally
+    js_getproperty(J, -1, "location");
+    js_setglobal(J, "location");
+    
     js_pop(J, 1); // pop window object
     
     std::cout << "VirtualDOM: Window object created successfully" << std::endl;
@@ -652,6 +731,74 @@ void VirtualDOM::setupDocumentProperties(js_State* J) {
     js_pop(J, 1); // pop document object
     
     std::cout << "VirtualDOM: Document properties set up successfully" << std::endl;
+}
+
+// Location object methods and properties
+void VirtualDOM::js_locationHrefGetter(js_State* J) {
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView) {
+        js_pushstring(J, vdom->webView->url.c_str());
+    } else {
+        js_pushstring(J, "");
+    }
+}
+
+void VirtualDOM::js_locationHrefSetter(js_State* J) {
+    const char* newUrl = js_tostring(J, 1);
+    std::cout << "Property assignment intercepted: location.href = \"" << newUrl << "\"" << std::endl;
+    
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView && newUrl) {
+        std::cout << "Navigating to: " << newUrl << std::endl;
+        vdom->webView->navigateToUrl(newUrl);
+    }
+}
+
+void VirtualDOM::js_locationReplace(js_State* J) {
+    const char* newUrl = js_tostring(J, 1);
+    std::cout << "Method called: location.replace(\"" << (newUrl ? newUrl : "undefined") << "\")" << std::endl;
+    
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView && newUrl) {
+        std::cout << "Replacing location with: " << newUrl << std::endl;
+        
+        // Set navigation flag to prevent button overlay issues
+        if (vdom->webView->container) {
+            vdom->webView->container->navigationInProgress = true;
+        }
+        
+        // For replace(), we navigate but don't add to history
+        // For simplicity, we'll use the same navigation method
+        // In a full implementation, you'd modify history differently
+        vdom->webView->navigateToUrl(newUrl);
+    }
+    
+    js_pushundefined(J);
+}
+
+void VirtualDOM::js_locationReload(js_State* J) {
+    std::cout << "Method called: location.reload()" << std::endl;
+    
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView) {
+        std::cout << "Reloading current page" << std::endl;
+        vdom->webView->reloadPage();
+    }
+    
+    js_pushundefined(J);
+}
+
+void VirtualDOM::js_locationAssign(js_State* J) {
+    const char* newUrl = js_tostring(J, 1);
+    std::cout << "Method called: location.assign(\"" << (newUrl ? newUrl : "undefined") << "\")" << std::endl;
+    
+    VirtualDOM* vdom = getVirtualDOMFromJS(J, 0);
+    if (vdom && vdom->webView && newUrl) {
+        std::cout << "Assigning location to: " << newUrl << std::endl;
+        vdom->webView->navigateToUrl(newUrl);
+    }
+    
+    js_pushundefined(J);
 }
 
 // Property getter/setter implementations

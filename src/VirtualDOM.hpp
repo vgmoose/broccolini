@@ -17,6 +17,27 @@ class WebView;
 class JSEngine;
 class WebView;
 
+// Helper macros for JavaScript bindings
+#define DECLARE_JS_PROPERTY_ACCESSOR(name) \
+    static void js_##name##Getter(js_State* J); \
+    static void js_##name##Setter(js_State* J);
+
+#define DECLARE_JS_METHOD(name) \
+    static void js_##name(js_State* J);
+
+#define SETUP_JS_PROPERTY(obj_index, property_name, getter_func, setter_func) \
+    do { \
+        js_newcfunction(J, getter_func, "get", 0); \
+        js_newcfunction(J, setter_func, "set", 1); \
+        js_defaccessor(J, obj_index, property_name, 0); \
+    } while(0)
+
+#define SETUP_JS_METHOD(obj_index, method_name, func, argc) \
+    do { \
+        js_newcfunction(J, func, method_name, argc); \
+        js_setproperty(J, obj_index, method_name); \
+    } while(0)
+
 // Simple Virtual DOM node representation
 struct VNode {
     std::string tag;
@@ -89,6 +110,17 @@ private:
     static void js_innerHTMLGetter(js_State* J);
     static void js_documentTitleSetter(js_State* J);
     static void js_documentTitleGetter(js_State* J);
+    
+    // Location object methods and properties
+    static void js_locationHrefGetter(js_State* J);
+    static void js_locationHrefSetter(js_State* J);
+    static void js_locationReplace(js_State* J);
+    static void js_locationReload(js_State* J);
+    static void js_locationAssign(js_State* J);
+    
+    // Window object methods
+    static void setupLocationObject(js_State* J);
+    static void setupWindowHierarchy(js_State* J);
     
     // Helper functions
     std::shared_ptr<VNode> findNodeById(std::shared_ptr<VNode> node, const std::string& id);

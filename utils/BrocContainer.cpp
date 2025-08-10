@@ -1,6 +1,7 @@
 #include "BrocContainer.hpp"
 #include "../libs/chesto/src/NetImageElement.hpp"
 #include "../libs/chesto/src/ImageElement.hpp"
+#include "../src/JSEngine.hpp"
 #include "../src/Base64Image.hpp"
 #include "../src/MainDisplay.hpp"
 #include "../src/URLBar.hpp"
@@ -520,6 +521,16 @@ void BrocContainer::get_viewport(litehtml::position& client ) const {
 std::shared_ptr<litehtml::element> BrocContainer::create_element(const char *tag_name, const litehtml::string_map &attributes, const std::shared_ptr<litehtml::document> &doc) {
     // std::cout << "Requested to create an element: " << tag_name << std::endl;
 
+    if (std::string(tag_name) == "button") {
+        std::cout << "Creating button element" << std::endl;
+        
+        // We'll let litehtml create the default button element
+        // but we'll also track it for later when we need to create the Chesto button overlay
+        auto element = std::shared_ptr<litehtml::element>(nullptr); // Let litehtml create the default
+        
+        return element; // Return nullptr to use default litehtml button element
+    }
+
     if (std::string(tag_name) == "meta" && attributes.count("name") > 0) {
         printf("Found meta tag\n");
         std::string name = attributes.at("name");
@@ -598,9 +609,140 @@ void BrocContainer::get_language(litehtml::string& language, litehtml::string & 
 }
 
 void BrocContainer::on_mouse_event(const litehtml::element::ptr& el, litehtml::mouse_event event) {
+    // Mouse events are now handled by Chesto Button widgets instead
     // printf("Mouse event: %d\n", event);
-    // auto el = m_root_render->get_element_by_point(0, 0, 10, 10);
-    // printf("ELEMENT: %s\n", el->get_tagName().c_str());
-    // printf("Mouse event: %d\n", event);
+}
+
+void BrocContainer::handleButtonClick(const litehtml::element::ptr& button_element) {
+    if (!button_element) return;
+    
+    std::cout << "Processing button click..." << std::endl;
+    
+    // Execute any JavaScript onclick handler
+    executeJavaScriptOnClick(button_element);
+}
+
+void BrocContainer::executeJavaScriptOnClick(const litehtml::element::ptr& element) {
+    if (!element || !webView || !webView->jsEngine) return;
+    
+    // Get the onclick attribute
+    const char* onclick = element->get_attr("onclick");
+    if (onclick && strlen(onclick) > 0) {
+        std::cout << "Executing onclick JavaScript: " << onclick << std::endl;
+        
+        // Execute the JavaScript code
+        bool success = webView->jsEngine->executeScript(onclick);
+        if (!success) {
+            std::cout << "Failed to execute onclick JavaScript" << std::endl;
+        }
+    } else {
+        std::cout << "No onclick handler found for button" << std::endl;
+    }
+}
+
+void BrocContainer::cleanupChestoButtons() {
+    std::cout << "Starting cleanup of button overlays..." << std::endl;
+    
+    // Just remove overlays from webView's children list and clear registry
+    // Don't delete the Elements - let Chesto handle cleanup automatically
+    for (auto& pair : buttonRegistry) {
+        Element* overlay = pair.second;
+        if (overlay) {
+            std::cout << "Removing overlay from webView..." << std::endl;
+            // Remove overlay from webView's children list
+            webView->remove(overlay);
+            // Note: Not deleting the overlay - Chesto will clean it up automatically
+        }
+    }
+    buttonRegistry.clear();
+    chestoButtonsCreated = false; // Reset the flag
+    std::cout << "Button overlays removed from webView (Chesto will handle cleanup)" << std::endl;
+}
+
+void BrocContainer::createChestoButtonsFromHTML() {
+    if (!webView || !webView->m_doc || chestoButtonsCreated || navigationInProgress) {
+        return; // Skip if already created, no document, or navigation in progress
+    }
+    
+    std::cout << "Creating Chesto buttons from HTML button elements..." << std::endl;
+    
+    // Find all button elements in the document
+    auto root = webView->m_doc->root();
+    if (!root) {
+        std::cout << "No root element found" << std::endl;
+        return;
+    }
+    
+    // Use litehtml's select_all method to find all button elements
+    litehtml::elements_list button_elements = root->select_all("button");
+    
+    std::cout << "Found " << button_elements.size() << " button elements" << std::endl;
+    
+    bool createdAnyButtons = false;
+    for (auto& html_button : button_elements) {
+        if (createChestoButtonFromElement(html_button)) {
+            createdAnyButtons = true;
+        }
+    }
+    
+    if (createdAnyButtons) {
+        chestoButtonsCreated = true;
+        std::cout << "Chesto buttons created successfully" << std::endl;
+    }
+}
+
+bool BrocContainer::createChestoButtonFromElement(const litehtml::element::ptr& html_button) {
+    if (!html_button) return false;
+    
+    // Get button text content for debugging
+    std::string buttonText;
+    html_button->get_text(buttonText);
+    if (buttonText.empty()) {
+        buttonText = "Button"; // Default text
+    }
+    
+    std::cout << "Creating invisible overlay for button: '" << buttonText << "'" << std::endl;
+    
+    // Get the button's position using get_placement()
+    litehtml::position placement = html_button->get_placement();
+    
+    if (placement.width <= 0 || placement.height <= 0) {
+        std::cout << "Button has no dimensions (w:" << placement.width << " h:" << placement.height << "), skipping" << std::endl;
+        return false;
+    }
+    
+    std::cout << "Button placement: x=" << placement.x << " y=" << placement.y 
+              << " w=" << placement.width << " h=" << placement.height << std::endl;
+    
+    // Create invisible Element overlay 
+    Element* overlay = new Element();
+    
+    // Set dimensions and make it touchable but invisible
+    overlay->width = placement.width;
+    overlay->height = placement.height;
+    overlay->touchable = true;
+    overlay->hidden = false;  // Not hidden, just no background
+    overlay->hasBackground = false;  // No background = invisible
+    
+    // Position the overlay over the HTML button
+    // Note: WebView is already positioned at y = urlBar->height, so we don't add offset
+    overlay->position(placement.x, placement.y);
+    
+    // Set up the click callback
+    overlay->action = [this, html_button]() {
+        std::cout << "Invisible overlay clicked for button!" << std::endl;
+        this->executeJavaScriptOnClick(html_button);
+    };
+    
+    // Add overlay to webView as a child
+    webView->child(overlay);
+    
+    // Store in registry for cleanup later
+    buttonRegistry[html_button] = overlay;
+    
+    std::cout << "Created invisible overlay at (" << placement.x << ", " << placement.y 
+              << ") with size " << placement.width << "x" << placement.height << std::endl;
+    
+    return true;
 }
     

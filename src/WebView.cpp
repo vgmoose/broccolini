@@ -106,6 +106,7 @@ void WebView::render(Element *parent)
     }
     if (needsRender && this->m_doc != nullptr) {
         this->m_doc->render(this->width);
+        needsRender = false; // Mark as rendered
     }
 
     if (prevContainer != nullptr) {
@@ -120,6 +121,9 @@ void WebView::render(Element *parent)
             (litehtml::uint_ptr)container,
             this->x, this->y, &posObj
         );
+        
+        // After drawing (which populates render areas), create Chesto buttons for HTML button elements
+        container->createChestoButtonsFromHTML();
     }
 
     // render the child elements (above whatever we just drew)
@@ -308,6 +312,9 @@ void WebView::downloadPage()
         // delete all children
         wipeAll();
         
+        // Clean up any existing Chesto buttons before creating a new container
+        container->cleanupChestoButtons();
+        
         // TODO: crashes, deletes too early, but do this instead
         prevContainer = container;
     }
@@ -322,11 +329,21 @@ void WebView::downloadPage()
     // printf("Resetting container\n");
     container->set_base_url(this->url.c_str());
 
+    std::cout << "About to create litehtml document from contents..." << std::endl;
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
+    std::cout << "litehtml document created successfully" << std::endl;
+    
     this->needsRender = true;
 
+    // Reset navigation flag now that document is created successfully
+    if (container) {
+        container->navigationInProgress = false;
+    }
+
+    std::cout << "About to execute page scripts..." << std::endl;
     // Execute JavaScript after document is loaded
     executePageScripts();
+    std::cout << "Page scripts executed successfully" << std::endl;
 
     // clear and append the history up to this point, if the current index is not the current url
     if (historyIndex < 0 || history[historyIndex] != this->url) {
@@ -509,4 +526,40 @@ void WebView::setTitle(const std::string& title) {
     this->titleSetDynamically = true;  // Mark as dynamically set
     std::cout << "Setting WebView title to: " << title << std::endl;
     CST_SetWindowTitle(title.c_str());
+}
+
+void WebView::navigateToUrl(const std::string& newUrl) {
+    std::cout << "Navigation requested: " << newUrl << std::endl;
+    
+    // Update the URL
+    this->url = newUrl;
+    
+    // Add to history if it's a different URL
+    if (history.empty() || history.back() != newUrl) {
+        // If we're not at the end of history, remove everything after current position
+        if (historyIndex >= 0 && historyIndex < history.size() - 1) {
+            history.erase(history.begin() + historyIndex + 1, history.end());
+        }
+        
+        history.push_back(newUrl);
+        historyIndex = history.size() - 1;
+    }
+    
+    // Update URL bar if available
+    auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
+    if (mainDisplay && mainDisplay->urlBar) {
+        mainDisplay->urlBar->currentUrl = this->url;
+    }
+    
+    // Mark for loading and reset redirect count
+    needsLoad = true;
+    redirectCount = 0;
+    
+    std::cout << "Navigation setup complete, will load: " << this->url << std::endl;
+}
+
+void WebView::reloadPage() {
+    std::cout << "Page reload requested" << std::endl;
+    needsLoad = true;
+    redirectCount = 0;
 }

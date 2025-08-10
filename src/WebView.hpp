@@ -81,5 +81,9 @@ public:
     void recreateDocument();
 
     void setTitle(const std::string& title);
+    
+    // Navigation methods for JavaScript location object
+    void navigateToUrl(const std::string& newUrl);
+    void reloadPage();
 };
 #endif // WEBVIEW_H
