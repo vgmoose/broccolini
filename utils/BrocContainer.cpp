@@ -275,10 +275,10 @@ void BrocContainer::draw_image(
     auto renderer = RootDisplay::mainDisplay->renderer;
 
     CST_Rect dimens = {
-        bg.clip_box.x,
-        bg.clip_box.y,
-        bg.clip_box.width,
-        bg.clip_box.height
+        bg.origin_box.x,
+        bg.origin_box.y, 
+        bg.origin_box.width,
+        bg.origin_box.height
     };
 
     // printf("Background drawn at: %d, %d, %d, %d\n", dimens.x, dimens.y, dimens.w, dimens.h);
@@ -289,8 +289,8 @@ void BrocContainer::draw_image(
         auto resolvedUrl = resolve_url(url.c_str(), base_url.c_str());
         auto img = this->imageCache[resolvedUrl];
         if (img != nullptr) {
-            // printf("Positioning image: %s, postion %f, %f\n", url.c_str(), bg.clip_box.x, bg.clip_box.y);
-            img->setPosition(webView->x + bg.clip_box.x, -1*webView->y + bg.clip_box.y);
+            // printf("Positioning image: %s, postion %f, %f\n", url.c_str(), bg.origin_box.x, bg.origin_box.y);
+            img->setPosition(webView->x + bg.origin_box.x, -1*webView->y + bg.origin_box.y);
             img->setSize(dimens.w, dimens.h);
 
             // if it's not a background attachment, move it to the front
@@ -1153,16 +1153,10 @@ void BrocContainer::handleLinkClick(const litehtml::element::ptr& link_element) 
         return;
     }
     
-    std::cout << "Navigating to: " << href << std::endl;
+    std::cout << "(Link clicked) Navigating to: " << href << std::endl;
     
-    // Resolve the URL and navigate (using the same logic as the old on_anchor_click)
+    // Resolve the URL and navigate
     std::string newUrl = resolve_url(href, "");
-    webView->url = newUrl;
-    webView->needsLoad = true;
-
-    // Update URL bar
-    auto urlBar = ((MainDisplay*)RootDisplay::mainDisplay)->urlBar;
-    urlBar->urlText->setText(webView->url.c_str());
-    urlBar->urlText->update();
+    webView->goTo(newUrl);
 }
     

@@ -237,8 +237,7 @@ void URLBar::showKeyboard() {
         }
         if (text == '\n') {
             // enter
-            this->webView->url = this->currentUrl;
-            this->webView->needsLoad = true;
+            this->webView->goTo(this->currentUrl);
             this->keyboard->hidden = true;
             return;
         }

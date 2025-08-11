@@ -816,9 +816,7 @@ void VirtualDOM::js_locationReplace(js_State* J) {
             vdom->webView->container->navigationInProgress = true;
         }
         
-        // For replace(), we navigate but don't add to history
-        // For simplicity, we'll use the same navigation method
-        // In a full implementation, you'd modify history differently
+        // TODO: don't update history for replace
         vdom->webView->goTo(newUrl);
     }
     

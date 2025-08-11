@@ -387,6 +387,9 @@ void WebView::downloadPage()
     mainDisplay->urlBar->webView = this;
     mainDisplay->urlBar->currentUrl = this->url;
     mainDisplay->urlBar->updateInfo();
+
+    // jump up to the top of the page (TODO: store scroll position for the history)
+    this->y = minYScroll; // url bar height
 }
 
 void WebView::screenshot(std::string path) {
@@ -578,17 +581,8 @@ void WebView::goTo(const std::string& newUrl) {
     
     // Update the URL
     this->url = newUrl;
-    
-    // Add to history if it's a different URL
-    if (history.empty() || history.back() != newUrl) {
-        // If we're not at the end of history, remove everything after current position
-        if (historyIndex >= 0 && historyIndex < history.size() - 1) {
-            history.erase(history.begin() + historyIndex + 1, history.end());
-        }
-        
-        history.push_back(newUrl);
-        historyIndex = history.size() - 1;
-    }
+
+    // history is managed now in the downloadPage (to prevent storing redirected urls)
     
     // Update URL bar if available
     auto mainDisplay = (MainDisplay*)RootDisplay::mainDisplay;
@@ -607,4 +601,6 @@ void WebView::reloadPage() {
     std::cout << "Page reload requested" << std::endl;
     needsLoad = true;
     redirectCount = 0;
+
+    this->y = minYScroll; // reset scroll position to top
 }
