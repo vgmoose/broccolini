@@ -465,59 +465,122 @@ void WebView::executePageScripts() {
     // Find and execute script tags from the HTML document
     // We need to traverse the litehtml document to find script elements
     executeScriptsFromDocument();
+    
+    // Test if any functions were defined (for debugging)
+    std::cout << "Testing for common function names after script execution..." << std::endl;
+    jsEngine->globalFunctionExists("updateValue");
+    jsEngine->globalFunctionExists("resetValue");
+    jsEngine->globalFunctionExists("loadValue");
+    jsEngine->globalFunctionExists("testFunction");
+    jsEngine->globalFunctionExists("simpleTest");
+    jsEngine->globalFunctionExists("myGlobalFunction");
 }
 
 void WebView::executeScriptsFromDocument() {
     if (!m_doc) return;
     
-    // For now, we'll implement a basic script extraction
-    // This is a simplified approach - in a full implementation, we'd properly traverse the DOM tree
+    std::cout << "[WebView] Starting script extraction from document" << std::endl;
+    std::cout << "[WebView] HTML content length: " << this->contents.length() << std::endl;
+    
+    // Debug: Show first 500 characters of HTML content to see what we're working with
+    std::cout << "[WebView] HTML content preview:" << std::endl;
+    std::cout << this->contents.substr(0, 500) << std::endl;
+    std::cout << "[WebView] ..." << std::endl;
     
     // Look for script content in the original HTML
     std::string html = this->contents;
     size_t pos = 0;
+    int scriptCount = 0;
     
-    while ((pos = html.find("<script", pos)) != std::string::npos) {
-        // Find the end of the opening script tag
-        size_t tagEnd = html.find(">", pos);
-        if (tagEnd == std::string::npos) break;
-        
-        // Check if this is a script with type="text/javascript" or no type (default)
-        std::string openingTag = html.substr(pos, tagEnd - pos + 1);
-        bool isJavaScript = true;
-        
-        // Simple check for non-JavaScript script types
-        if (openingTag.find("type=") != std::string::npos && 
-            openingTag.find("javascript") == std::string::npos &&
-            openingTag.find("text/javascript") == std::string::npos &&
-            openingTag.find("application/javascript") == std::string::npos) {
-            isJavaScript = false;
-        }
-        
-        if (isJavaScript) {
-            // Find the closing script tag
-            size_t scriptEnd = html.find("</script>", tagEnd);
-            if (scriptEnd != std::string::npos) {
-                // Extract the script content
-                std::string scriptContent = html.substr(tagEnd + 1, scriptEnd - tagEnd - 1);
+    // Try both lowercase and uppercase script tags
+    std::vector<std::string> scriptTags = {"<script", "<SCRIPT"};
+    
+    for (const auto& scriptTag : scriptTags) {
+        pos = 0;
+        while ((pos = html.find(scriptTag, pos)) != std::string::npos) {
+            scriptCount++;
+            std::cout << "[WebView] Found script tag #" << scriptCount << " (" << scriptTag << ") at position " << pos << std::endl;
+            
+            // Find the end of the opening script tag
+            size_t tagEnd = html.find(">", pos);
+            if (tagEnd == std::string::npos) {
+                std::cout << "[WebView] No closing > found for script tag" << std::endl;
+                break;
+            }
+            
+            // Check if this is a script with type="text/javascript" or no type (default)
+            std::string openingTag = html.substr(pos, tagEnd - pos + 1);
+            std::cout << "[WebView] Opening tag: " << openingTag << std::endl;
+            
+            bool isJavaScript = true;
+            
+            // Simple check for non-JavaScript script types
+            if (openingTag.find("type=") != std::string::npos && 
+                openingTag.find("javascript") == std::string::npos &&
+                openingTag.find("text/javascript") == std::string::npos &&
+                openingTag.find("application/javascript") == std::string::npos) {
+                isJavaScript = false;
+            }
+            
+            std::cout << "[WebView] Is JavaScript: " << (isJavaScript ? "YES" : "NO") << std::endl;
+            
+            if (isJavaScript) {
+                // Find the closing script tag (try both cases)
+                size_t scriptEnd = std::string::npos;
+                std::string closingTag;
                 
-                // Trim whitespace
-                size_t start = scriptContent.find_first_not_of(" \t\n\r");
-                size_t end = scriptContent.find_last_not_of(" \t\n\r");
+                if (scriptTag == "<script") {
+                    scriptEnd = html.find("</script>", tagEnd);
+                    closingTag = "</script>";
+                } else {
+                    scriptEnd = html.find("</SCRIPT>", tagEnd);
+                    closingTag = "</SCRIPT>";
+                }
                 
-                if (start != std::string::npos && end != std::string::npos) {
-                    scriptContent = scriptContent.substr(start, end - start + 1);
-                    
-                    if (!scriptContent.empty()) {
-                        std::cout << "Executing script: " << std::endl << scriptContent.substr(0, 100) << "..." << std::endl;
-                        executeJavaScript(scriptContent);
+                // If case-specific closing tag not found, try the other case
+                if (scriptEnd == std::string::npos) {
+                    if (scriptTag == "<script") {
+                        scriptEnd = html.find("</SCRIPT>", tagEnd);
+                        closingTag = "</SCRIPT>";
+                    } else {
+                        scriptEnd = html.find("</script>", tagEnd);
+                        closingTag = "</script>";
                     }
                 }
+                
+                if (scriptEnd != std::string::npos) {
+                    // Extract the script content
+                    std::string scriptContent = html.substr(tagEnd + 1, scriptEnd - tagEnd - 1);
+                    
+                    std::cout << "[WebView] Raw script content length: " << scriptContent.length() << std::endl;
+                    std::cout << "[WebView] Raw script preview: " << scriptContent.substr(0, 100) << "..." << std::endl;
+                    
+                    // Trim whitespace
+                    size_t start = scriptContent.find_first_not_of(" \t\n\r");
+                    size_t end = scriptContent.find_last_not_of(" \t\n\r");
+                    
+                    if (start != std::string::npos && end != std::string::npos) {
+                        scriptContent = scriptContent.substr(start, end - start + 1);
+                        
+                        if (!scriptContent.empty()) {
+                            std::cout << "[WebView] Executing script content (length " << scriptContent.length() << ")" << std::endl;
+                            executeJavaScript(scriptContent);
+                        } else {
+                            std::cout << "[WebView] Script content is empty after trimming" << std::endl;
+                        }
+                    } else {
+                        std::cout << "[WebView] No non-whitespace content found in script" << std::endl;
+                    }
+                } else {
+                    std::cout << "[WebView] No closing " << closingTag << " tag found" << std::endl;
+                }
             }
+            
+            pos = tagEnd + 1;
         }
-        
-        pos = tagEnd + 1;
     }
+    
+    std::cout << "[WebView] Script extraction completed. Found " << scriptCount << " script tags total" << std::endl;
 }
 
 bool WebView::executeJavaScript(const std::string& script) {
@@ -547,7 +610,7 @@ void WebView::cleanupJavaScript() {
 void WebView::recreateDocument() {
     if (!container) return;
     
-    std::cout << "Starting document recreation..." << std::endl;
+    std::cout << "[WebView] recreateDocument() called - this will not re-execute scripts!" << std::endl;
     
     // Store the current state
     std::string currentUrl = this->url;
@@ -564,7 +627,7 @@ void WebView::recreateDocument() {
     this->m_doc = litehtml::document::createFromString(this->contents.c_str(), container);
     this->needsRender = true;
     
-    std::cout << "Successfully recreated litehtml document from modified contents" << std::endl;
+    std::cout << "[WebView] Successfully recreated litehtml document from modified contents" << std::endl;
     
     // Do NOT execute page scripts again as that would cause infinite loops
 }

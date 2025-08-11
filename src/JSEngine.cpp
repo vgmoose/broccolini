@@ -36,14 +36,28 @@ bool JSEngine::executeScript(const std::string& script) {
     
     lastError = "";
     
-    // Use safer execution without try/catch for now
-    int result = js_dostring(J, script.c_str());
+    std::cout << "[JSEngine] Executing script (length: " << script.length() << ")" << std::endl;
     
-    if (result != 0) {
-        lastError = "Script execution returned error code: " + std::to_string(result);
+    // Use js_ploadstring + js_pcall for better global scope handling and exception safety
+    // This ensures function declarations persist in the global scope
+    if (js_ploadstring(J, "[script]", script.c_str())) {
+        lastError = std::string("Script loading error: ") + js_trystring(J, -1, "Error");
+        js_pop(J, 1);
+        std::cout << "[JSEngine] Script loading failed: " << lastError << std::endl;
         return false;
     }
     
+    // Call the loaded script with no arguments
+    js_pushundefined(J);
+    if (js_pcall(J, 0)) {
+        lastError = std::string("Script execution error: ") + js_trystring(J, -1, "Error");
+        js_pop(J, 1);
+        std::cout << "[JSEngine] Script execution failed: " << lastError << std::endl;
+        return false;
+    }
+    
+    js_pop(J, 1); // Pop the result
+    std::cout << "[JSEngine] Script executed successfully" << std::endl;
     return true;
 }
 
@@ -112,6 +126,17 @@ double JSEngine::getGlobalNumber(const std::string& name) {
     return 0.0;
 }
 
+bool JSEngine::globalFunctionExists(const std::string& name) {
+    if (!J) return false;
+    
+    js_getglobal(J, name.c_str());
+    bool isFunction = js_iscallable(J, -1);
+    js_pop(J, 1);
+    
+    std::cout << "[JSEngine] Function '" << name << "' exists: " << (isFunction ? "YES" : "NO") << std::endl;
+    return isFunction;
+}
+
 bool JSEngine::parseJSON(const std::string& jsonStr) {
     if (!J) {
         lastError = "JavaScript state not initialized";
@@ -157,11 +182,20 @@ bool JSEngine::parseJSON(const std::string& jsonStr) {
         
         std::string script = "var parsedJSON = JSON.parse('" + escapedJson + "');";
         
-        int result = js_dostring(J, script.c_str());
-        if (result != 0) {
-            lastError = "JSON.parse script execution failed with code: " + std::to_string(result);
+        if (js_ploadstring(J, "[json]", script.c_str())) {
+            lastError = std::string("JSON.parse loading error: ") + js_trystring(J, -1, "Error");
+            js_pop(J, 1);
             return false;
         }
+        
+        js_pushundefined(J);
+        if (js_pcall(J, 0)) {
+            lastError = std::string("JSON.parse execution error: ") + js_trystring(J, -1, "Error");
+            js_pop(J, 1);
+            return false;
+        }
+        
+        js_pop(J, 1); // Pop the result
         
         std::cout << "JSON.parse executed successfully!" << std::endl;
         return true;

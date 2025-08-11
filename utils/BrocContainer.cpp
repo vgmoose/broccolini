@@ -611,15 +611,17 @@ void BrocContainer::executeJavaScriptOnClick(const litehtml::element::ptr& eleme
     // Get the onclick attribute
     const char* onclick = element->get_attr("onclick");
     if (onclick && strlen(onclick) > 0) {
-        std::cout << "Executing onclick JavaScript: " << onclick << std::endl;
+        std::cout << "[BrocContainer] Executing onclick JavaScript: " << onclick << std::endl;
         
         // Execute the JavaScript code
         bool success = webView->jsEngine->executeScript(onclick);
         if (!success) {
-            std::cout << "Failed to execute onclick JavaScript" << std::endl;
+            std::cout << "[BrocContainer] Failed to execute onclick JavaScript: " << webView->jsEngine->getLastError() << std::endl;
+        } else {
+            std::cout << "[BrocContainer] onclick JavaScript executed successfully" << std::endl;
         }
     } else {
-        std::cout << "No onclick handler found for button" << std::endl;
+        std::cout << "[BrocContainer] No onclick handler found for button" << std::endl;
     }
 }
 

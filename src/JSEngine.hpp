@@ -28,6 +28,9 @@ public:
     std::string getGlobalString(const std::string& name);
     double getGlobalNumber(const std::string& name);
     
+    // Check if a global function exists
+    bool globalFunctionExists(const std::string& name);
+    
     // JSON parsing utilities
     bool parseJSON(const std::string& jsonStr);
     std::vector<std::string> getArrayFromGlobal(const std::string& globalName, const std::string& arrayPath);
