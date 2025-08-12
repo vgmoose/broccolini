@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+
 struct CookieData
 {
 	std::string value;

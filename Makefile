@@ -4,8 +4,8 @@ APP_TITLE	:=	broccolini
 APP_AUTHOR	:=	vgmoose
 APP_VERSION	:=	0.2
 
-# JavaScript engine selection (override with: make JS_ENGINE=mujs)
-JS_ENGINE	?=	quickjs
+# JavaScript engine selection (override with: make JS_ENGINE=quickjs)
+JS_ENGINE	?=	mujs
 
 # Base sources and Chesto-related flags
 SOURCES		+=	. libs/litehtml/src libs/litehtml/src/gumbo src utils
