@@ -9,7 +9,7 @@ JS_ENGINE	?=	mujs
 
 # Base sources and Chesto-related flags
 SOURCES		+=	. libs/litehtml/src libs/litehtml/src/gumbo src utils
-CFLAGS		+=	-g -DUSE_KEYBOARD -DNETWORK
+CFLAGS		+=	-g -DUSE_KEYBOARD -DNETWORK -D_GNU_SOURCE
 
 CFLAGS		+=	-I$(TOPDIR)/libs/litehtml/include -I$(TOPDIR)/libs/litehtml/include/litehtml
 CFLAGS		+=	-I$(TOPDIR)/libs/litehtml/src/gumbo/include -I$(TOPDIR)/libs/litehtml/src/gumbo/include/gumbo

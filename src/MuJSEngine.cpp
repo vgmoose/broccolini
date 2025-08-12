@@ -246,16 +246,36 @@ bool MuJSEngine::parseJSON(const std::string& jsonStr)
 	if (!J)
 		return false;
 
-	try
-	{
-		std::string script = "JSON.parse(" + jsonStr + ")";
-		js_dostring(J, script.c_str());
-		return true;
+	lastError.clear();
+
+	// Properly escape the JSON string by wrapping it in single quotes
+	// and escaping any single quotes inside
+	std::string escapedJson = jsonStr;
+	size_t pos = 0;
+	while ((pos = escapedJson.find("'", pos)) != std::string::npos) {
+		escapedJson.replace(pos, 1, "\\'");
+		pos += 2;
 	}
-	catch (...)
+
+	std::string script = "JSON.parse('" + escapedJson + "')";
+	
+	if (js_ploadstring(J, "[json]", script.c_str()))
 	{
+		lastError = std::string("JSON parse script loading error: ") + js_trystring(J, -1, "Error");
+		js_pop(J, 1);
 		return false;
 	}
+
+	js_pushundefined(J);
+	if (js_pcall(J, 0))
+	{
+		lastError = std::string("JSON parse execution error: ") + js_trystring(J, -1, "Error");
+		js_pop(J, 1);
+		return false;
+	}
+
+	js_pop(J, 1); // Pop the result
+	return true;
 }
 
 // Utility
