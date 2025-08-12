@@ -10,3 +10,6 @@
 [submodule "libs/snabbdom"]
 	path = libs/snabbdom
 	url = https://github.com/snabbdom/snabbdom
+[submodule "libs/quickjs"]
+	path = libs/quickjs
+	url = git@github.com:quickjs-ng/quickjs.git

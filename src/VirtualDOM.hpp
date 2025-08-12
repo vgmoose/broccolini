@@ -1,149 +1,112 @@
 #ifndef VIRTUAL_DOM_HPP
 #define VIRTUAL_DOM_HPP
 
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include "JSEngine.hpp"
 #include <functional>
 #include <litehtml.h>
-#include "mujs.h"
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-// Forward declarations
-class JSEngine;
 class WebView;
-
-// Forward declarations
-class JSEngine;
-class WebView;
-
-// Helper macros for JavaScript bindings
-#define DECLARE_JS_PROPERTY_ACCESSOR(name) \
-    static void js_##name##Getter(js_State* J); \
-    static void js_##name##Setter(js_State* J);
-
-#define DECLARE_JS_METHOD(name) \
-    static void js_##name(js_State* J);
-
-#define SETUP_JS_PROPERTY(obj_index, property_name, getter_func, setter_func) \
-    do { \
-        js_newcfunction(J, getter_func, "get", 0); \
-        js_newcfunction(J, setter_func, "set", 1); \
-        js_defaccessor(J, obj_index, property_name, 0); \
-    } while(0)
-
-#define SETUP_JS_METHOD(obj_index, method_name, func, argc) \
-    do { \
-        js_newcfunction(J, func, method_name, argc); \
-        js_setproperty(J, obj_index, method_name); \
-    } while(0)
 
 // Simple Virtual DOM node representation
-struct VNode {
-    std::string tag;
-    std::map<std::string, std::string> attributes;
-    std::map<std::string, std::string> properties;
-    std::string textContent;
-    std::vector<std::shared_ptr<VNode>> children;
-    
-    // Reference to corresponding litehtml element (if any)
-    litehtml::element* htmlElement = nullptr;
-    
-    VNode(const std::string& tag = "") : tag(tag) {}
+struct VNode
+{
+	std::string tag;
+	std::map<std::string, std::string> attributes;
+	std::map<std::string, std::string> properties;
+	std::string textContent;
+	std::vector<std::shared_ptr<VNode>> children;
+
+	// Reference to corresponding litehtml element (if any)
+	litehtml::element* htmlElement = nullptr;
+
+	VNode(const std::string& tag = "")
+		: tag(tag)
+	{
+	}
 };
 
-class VirtualDOM {
+class VirtualDOM
+{
 public:
-    VirtualDOM(WebView* webView);
-    ~VirtualDOM();
-    
-    // Initialize Snabbdom in the JavaScript engine
-    bool initializeSnabbdom();
-    
-    // Create a virtual node from JavaScript object
-    std::shared_ptr<VNode> createVNodeFromJS(js_State* J, int index);
-    
-    // Convert litehtml document to virtual DOM
-    std::shared_ptr<VNode> createVNodeFromLiteHTML(litehtml::element* element);
-    
-    // Apply virtual DOM changes back to litehtml
-    bool applyChangesToLiteHTML(std::shared_ptr<VNode> oldNode, std::shared_ptr<VNode> newNode);
-    
-    // Execute a DOM update using Snabbdom
-    bool updateDOM(const std::string& patchFunction);
-    
-    // Get the root virtual node
-    std::shared_ptr<VNode> getRootNode() { return rootNode; }
-    
-    // Set up basic DOM API functions in JavaScript
-    void setupDOMBindings();
-    
-    // DOM manipulation methods that work with litehtml
-    litehtml::element::ptr findElementByIdInLiteHTML(const std::string& id);
-    void appendElementToLiteHTML(litehtml::element::ptr parent, litehtml::element::ptr child);
-    void triggerLiteHTMLRerender();
-    void appendElementToDOM(const std::string& tagName, const std::string& textContent, const std::string& parentId = "");
-    void updateElementTextContent(const std::string& elementId, const std::string& newText);
-    
+	VirtualDOM(WebView* webView);
+	~VirtualDOM();
+
+	// Initialize Snabbdom in the JavaScript engine
+	bool initializeSnabbdom();
+
+	// Convert litehtml document to virtual DOM
+	std::shared_ptr<VNode> createVNodeFromLiteHTML(litehtml::element* element);
+
+	// Apply virtual DOM changes back to litehtml
+	bool applyChangesToLiteHTML(std::shared_ptr<VNode> oldNode,
+		std::shared_ptr<VNode> newNode);
+
+	// Execute a DOM update using Snabbdom
+	bool updateDOM(const std::string& patchFunction);
+
+	// Get the root virtual node
+	std::shared_ptr<VNode> getRootNode() { return rootNode; }
+
+	// Set up basic DOM API functions in JavaScript
+	void setupDOMBindings();
+
+	// DOM manipulation methods that work with litehtml
+	litehtml::element::ptr findElementByIdInLiteHTML(const std::string& id);
+	void appendElementToLiteHTML(litehtml::element::ptr parent,
+		litehtml::element::ptr child);
+	void triggerLiteHTMLRerender();
+	void appendElementToDOM(const std::string& tagName,
+		const std::string& textContent,
+		const std::string& parentId = "");
+	void updateElementTextContent(const std::string& elementId,
+		const std::string& newText);
+
 private:
-    WebView* webView;
-    JSEngine* jsEngine;
-    std::shared_ptr<VNode> rootNode;
-    
-    // JavaScript binding functions
-    static void js_createElement(js_State* J);
-    static void js_createTextNode(js_State* J);
-    static void js_getElementById(js_State* J);
-    static void js_querySelector(js_State* J);
-    static void js_appendChild(js_State* J);
-    static void js_updateTextContent(js_State* J);
-    
-    // Event listener methods
-    static void js_addEventListener(js_State* J);
-    static void js_removeEventListener(js_State* J);
-    
-    // Storage methods - Cookies
-    static void js_getCookies(js_State* J);
-    static void js_setCookie(js_State* J);
-    
-    // Storage methods - localStorage
-    static void js_localStorage_getItem(js_State* J);
-    static void js_localStorage_setItem(js_State* J);
-    static void js_localStorage_removeItem(js_State* J);
-    static void js_localStorage_clear(js_State* J);
-    static void js_localStorage_key(js_State* J);
-    static void js_localStorage_length(js_State* J);
-    
-    // Property setter system
-    static void setupElementPropertySetters(js_State* J);
-    static void setupWindowObject(js_State* J);
-    static void setupDocumentProperties(js_State* J);
-    
-    // Property getters/setters
-    static void js_textContentSetter(js_State* J);
-    static void js_textContentGetter(js_State* J);
-    static void js_innerHTMLSetter(js_State* J);
-    static void js_innerHTMLGetter(js_State* J);
-    static void js_documentTitleSetter(js_State* J);
-    static void js_documentTitleGetter(js_State* J);
-    
-    // Location object methods and properties
-    static void js_locationHrefGetter(js_State* J);
-    static void js_locationHrefSetter(js_State* J);
-    static void js_locationReplace(js_State* J);
-    static void js_locationReload(js_State* J);
-    static void js_locationAssign(js_State* J);
-    
-    // Window object methods
-    static void setupLocationObject(js_State* J);
-    static void setupWindowHierarchy(js_State* J);
-    
-    // Helper functions
-    std::shared_ptr<VNode> findNodeById(std::shared_ptr<VNode> node, const std::string& id);
-    void traverseLiteHTMLElement(litehtml::element* element, std::shared_ptr<VNode> parent);
-    
-    // Get VirtualDOM instance from JavaScript context
-    static VirtualDOM* getVirtualDOMFromJS(js_State* J, int index = -1);
+	WebView* webView;
+	JSEngine* jsEngine;  // owning elsewhere
+	JSEngine* engine;    // convenience pointer (same as jsEngine)
+	std::shared_ptr<VNode> rootNode;
+
+	// Helper functions for the new simplified approach
+	void registerCppCallbacks();
+	void createDOMWithJavaScript();
+	void setupDocumentProperties();
+	void setupWindowHierarchy();
+	void setupLocationObject();
+	void setupLocalStorageObject();
+	void defineElementAccessors();
+
+	// Internal helpers for callbacks
+	void cb_createElement();
+	void cb_createTextNode();
+	void cb_getElementById();
+	void cb_querySelector();
+	void cb_appendChild();
+	void cb_updateTextContent();
+	void cb_addEventListener();
+	void cb_removeEventListener();
+	void cb_textContentGetter();
+	void cb_textContentSetter();
+	void cb_innerHTMLGetter();
+	void cb_innerHTMLSetter();
+	void cb_documentTitleGetter();
+	void cb_documentTitleSetter();
+	void cb_locationHrefGetter();
+	void cb_locationHrefSetter();
+	void cb_locationReplace();
+	void cb_locationReload();
+	void cb_locationAssign();
+	void cb_getCookies();
+	void cb_setCookie();
+	void cb_localStorage_getItem();
+	void cb_localStorage_setItem();
+	void cb_localStorage_removeItem();
+	void cb_localStorage_clear();
+	void cb_localStorage_key();
 };
 
-#endif // VIRTUALDOM_HPP
+#endif // VIRTUAL_DOM_HPP

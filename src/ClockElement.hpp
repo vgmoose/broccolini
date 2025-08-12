@@ -10,7 +10,7 @@ public:
 
 	CST_Font* clockFont = NULL;
 	int topVal = 12;
-	int botVal =  0;
+	int botVal = 0;
 
 	bool is12Hour = true;
 

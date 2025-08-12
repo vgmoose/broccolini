@@ -17,23 +17,23 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <ctime>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fstream>
-#include <sstream>
 #include <iostream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <ctime>
 
-#include <map>
 #include <algorithm>
 #include <cstring>
+#include <map>
 #include <regex>
 
 #include "Utils.hpp"
@@ -45,8 +45,7 @@
 #define RAMFS "resin/"
 #endif
 
-#define BUF_SIZE 0x800000 //8MB.
-
+#define BUF_SIZE 0x800000 // 8MB.
 
 int (*networking_callback)(void*, double, double, double, double);
 
@@ -90,15 +89,15 @@ bool mkpath(std::string path)
 		switch (errno)
 		{
 		case ENOENT:
-			//parent didn't exist, try to create it
+			// parent didn't exist, try to create it
 			if (mkpath(path.substr(0, path.find_last_of('/'))))
-				//Now, try to create again.
+				// Now, try to create again.
 				bSuccess = 0 == ::mkdir(path.c_str(), 0775);
 			else
 				bSuccess = false;
 			break;
 		case EEXIST:
-			//Done!
+			// Done!
 			bSuccess = true;
 			break;
 		default:
@@ -113,8 +112,10 @@ bool mkpath(std::string path)
 
 #ifndef NETWORK_MOCK
 // networking optimizations adapted from:
-//  - https://github.com/samdejong86/Arria-V-ADC-Ethernet-software/blob/master/ADC_Socket_bsp/iniche/src/h/socket.h
-int sockopt_callback(void* clientp, curl_socket_t curlfd, curlsocktype purpose)
+//  -
+//  https://github.com/samdejong86/Arria-V-ADC-Ethernet-software/blob/master/ADC_Socket_bsp/iniche/src/h/socket.h
+int sockopt_callback(void* clientp, curl_socket_t curlfd,
+	curlsocktype purpose)
 {
 	int winscale = 1, rcvbuf = 0x20000, tcpsack = 1;
 #ifndef WIN32
@@ -129,56 +130,65 @@ int sockopt_callback(void* clientp, curl_socket_t curlfd, curlsocktype purpose)
 #ifndef NETWORK_MOCK
 void setPlatformCurlFlags(CURL* c)
 {
-	// // from https://github.com/GaryOderNichts/wiiu-examples/blob/main/curl-https/romfs/cacert.pem
+	// // from
+	// https://github.com/GaryOderNichts/wiiu-examples/blob/main/curl-https/romfs/cacert.pem
 	curl_easy_setopt(c, CURLOPT_CAINFO, RAMFS "res/cacert.pem");
 
 	curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, sockopt_callback);
 }
 #endif
 
-static size_t MemoryWriteCallback(void* contents, size_t size, size_t nmemb, void* userp)
+static size_t MemoryWriteCallback(void* contents, size_t size, size_t nmemb,
+	void* userp)
 {
- 	((std::string*)userp)->append((char*)contents, size * nmemb);
- 	return size * nmemb;
+	((std::string*)userp)->append((char*)contents, size * nmemb);
+	return size * nmemb;
 }
 
-static size_t DiskWriteCallback(void* contents, size_t size, size_t num_files, void* userp)
+static size_t DiskWriteCallback(void* contents, size_t size, size_t num_files,
+	void* userp)
 {
-	ntwrk_struct_t *data_struct = (ntwrk_struct_t *)userp;
-    size_t realsize = size * num_files;
+	ntwrk_struct_t* data_struct = (ntwrk_struct_t*)userp;
+	size_t realsize = size * num_files;
 
 	if (realsize + data_struct->offset >= data_struct->data_size)
-    {
-        fwrite(data_struct->data, data_struct->offset, 1, data_struct->out);
-        data_struct->offset = 0;
-    }
+	{
+		fwrite(data_struct->data, data_struct->offset, 1, data_struct->out);
+		data_struct->offset = 0;
+	}
 
-    memcpy(&data_struct->data[data_struct->offset], contents, realsize);
-    data_struct->offset += realsize;
-    data_struct->data[data_struct->offset] = 0;
-    return realsize;
+	memcpy(&data_struct->data[data_struct->offset], contents, realsize);
+	data_struct->offset += realsize;
+	data_struct->data[data_struct->offset] = 0;
+	return realsize;
 }
 
 // record the headers into a map
-size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata) {
+size_t header_callback(char* buffer, size_t size, size_t nitems,
+	void* userdata)
+{
 	std::map<std::string, std::string>* headerResp = (std::map<std::string, std::string>*)userdata;
 
 	std::string header(buffer);
 	std::string::size_type pos = header.find(':');
-	if (std::string::npos == pos) {
+	if (std::string::npos == pos)
+	{
 		// Malformed header?
 		return nitems * size;
 	}
-	
+
 	std::string name = header.substr(0, pos);
 	std::string value = header.substr(pos + 1);
 
 	// Remove whitespace
-	value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](int ch) {
-		return !std::isspace(ch);
-	}));
+	value.erase(value.begin(),
+		std::find_if(value.begin(), value.end(),
+			[](int ch)
+			{ return !std::isspace(ch); }));
 	// https://stackoverflow.com/a/313990/4953343
-	std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c){ return std::tolower(c); });
+	std::transform(name.begin(), name.end(), name.begin(),
+		[](unsigned char c)
+		{ return std::tolower(c); });
 	(*headerResp)[name] = value;
 
 	return nitems * size;
@@ -186,13 +196,10 @@ size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata)
 
 // https://gist.github.com/alghanmi/c5d7b761b2c9ab199157
 // if data_struct is specified, file will go straight to disk as it downloads
-bool downloadFileCommon(
-	std::string path,
-	std::string* buffer = NULL,
+bool downloadFileCommon(std::string path, std::string* buffer = NULL,
 	ntwrk_struct_t* data_struct = NULL,
 	int* http_code = NULL,
-	std::map<std::string, std::string>* headerResp = NULL
-)
+	std::map<std::string, std::string>* headerResp = NULL)
 {
 #ifndef NETWORK_MOCK
 	CURLcode res;
@@ -200,24 +207,27 @@ bool downloadFileCommon(
 	if (!curl)
 		return false;
 
-  setPlatformCurlFlags(curl);
+	setPlatformCurlFlags(curl);
 
 	curl_easy_setopt(curl, CURLOPT_URL, path.c_str());
 	curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, networking_callback);
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0);
 
 	// set user agent
-	const char* userAgent = "Mozilla/5.0 (Generic; Chesto) litehtml/0.8 (KHTML, like Gecko) Broccolini/0.0";
+	const char* userAgent = "Mozilla/5.0 (Generic; Chesto) litehtml/0.8 (KHTML, "
+							"like Gecko) Broccolini/0.0";
 
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent);
 
 	bool skipDisk = data_struct == NULL;
 
-	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, skipDisk ? MemoryWriteCallback : DiskWriteCallback);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
+		skipDisk ? MemoryWriteCallback : DiskWriteCallback);
 
 	// get header info as map
 	curl_slist* curlHeaders = NULL;
-	if (headerResp != NULL) {
+	if (headerResp != NULL)
+	{
 		// iterate through each header from the curl resp
 		curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
 		curl_easy_setopt(curl, CURLOPT_HEADERDATA, headerResp);
@@ -230,33 +240,30 @@ bool downloadFileCommon(
 
 	bool ret = curl_easy_perform(curl) == CURLE_OK;
 	// get status code info
-	if (http_code != NULL) {
+	if (http_code != NULL)
+	{
 		curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, http_code);
 	}
 
 	return ret;
 #else
-  return true;
+	return true;
 #endif
 }
 
-bool downloadFileToMemory(
-	std::string path,
-	std::string* buffer,
-	int* httpCode,
-	std::map<std::string, std::string>* headerResp
-)
+bool downloadFileToMemory(std::string path, std::string* buffer, int* httpCode,
+	std::map<std::string, std::string>* headerResp)
 {
 	return downloadFileCommon(path, buffer, NULL, httpCode, headerResp);
 }
 
 bool downloadFileToDisk(std::string remote_path, std::string local_path)
 {
-	FILE *out_file = fopen(local_path.c_str(), "wb");
+	FILE* out_file = fopen(local_path.c_str(), "wb");
 	if (!out_file)
 		return false;
 
-	uint8_t *buf = (uint8_t *)malloc(BUF_SIZE); // 8MB.
+	uint8_t* buf = (uint8_t*)malloc(BUF_SIZE); // 8MB.
 	if (buf == NULL)
 	{
 		fclose(out_file);
@@ -273,17 +280,14 @@ bool downloadFileToDisk(std::string remote_path, std::string local_path)
 	}
 
 	// write remaning data to file before free.
-    fwrite(data_struct.data, data_struct.offset, 1, data_struct.out);
-    free(data_struct.data);
+	fwrite(data_struct.data, data_struct.offset, 1, data_struct.out);
+	free(data_struct.data);
 	fclose(data_struct.out);
 
 	return true;
 }
 
-const char* plural(int amount)
-{
-	return (amount == 1) ? "" : "s";
-}
+const char* plural(int amount) { return (amount == 1) ? "" : "s"; }
 
 const std::string dir_name(std::string file_path)
 {
@@ -397,7 +401,8 @@ int remove_empty_dirs(const char* name, int count)
 		}
 	}
 
-	// now that we've been through this directory, check if it was an empty directory
+	// now that we've been through this directory, check if it was an empty
+	// directory
 	if (count == starting_count)
 	{
 		// empty, try rmdir (should only remove if empty anyway)
@@ -411,66 +416,74 @@ int remove_empty_dirs(const char* name, int count)
 }
 
 // https://stackoverflow.com/a/44562527/4953343
-std::string base64_decode(const std::string_view in) {
-  // table from '+' to 'z'
-  const uint8_t lookup[] = {
-      62,  255, 62,  255, 63,  52,  53, 54, 55, 56, 57, 58, 59, 60, 61, 255,
-      255, 0,   255, 255, 255, 255, 0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
-      10,  11,  12,  13,  14,  15,  16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
-      255, 255, 255, 255, 63,  255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
-      36,  37,  38,  39,  40,  41,  42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
-  static_assert(sizeof(lookup) == 'z' - '+' + 1);
+std::string base64_decode(const std::string_view in)
+{
+	// table from '+' to 'z'
+	const uint8_t lookup[] = {
+		62, 255, 62, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255,
+		255, 0, 255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+		10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+		255, 255, 255, 255, 63, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+		36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+	};
+	static_assert(sizeof(lookup) == 'z' - '+' + 1);
 
-  std::string out;
-  int val = 0, valb = -8;
-  for (uint8_t c : in) {
-    if (c < '+' || c > 'z')
-      break;
-    c -= '+';
-    if (lookup[c] >= 64)
-      break;
-    val = (val << 6) + lookup[c];
-    valb += 6;
-    if (valb >= 0) {
-      out.push_back(char((val >> valb) & 0xFF));
-      valb -= 8;
-    }
-  }
-  return out;
+	std::string out;
+	int val = 0, valb = -8;
+	for (uint8_t c : in)
+	{
+		if (c < '+' || c > 'z')
+			break;
+		c -= '+';
+		if (lookup[c] >= 64)
+			break;
+		val = (val << 6) + lookup[c];
+		valb += 6;
+		if (valb >= 0)
+		{
+			out.push_back(char((val >> valb) & 0xFF));
+			valb -= 8;
+		}
+	}
+	return out;
 }
 
+std::string base64_encode(const std::string_view in)
+{
+	// table from '+' to 'z'
+	const char lookup[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-std::string base64_encode(const std::string_view in) {
-  // table from '+' to 'z'
-  const char lookup[] =
-	  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	std::string out;
+	out.reserve(((in.size() + 2) / 3) * 4);
 
-  std::string out;
-  out.reserve(((in.size() + 2) / 3) * 4);
-
-  uint32_t val = 0;
-  int32_t valb = -6;
-  for (uint8_t c : in) {
-	val = (val << 8) + c;
-	valb += 8;
-	while (valb >= 0) {
-	  out.push_back(lookup[(val >> valb) & 0x3F]);
-	  valb -= 6;
+	uint32_t val = 0;
+	int32_t valb = -6;
+	for (uint8_t c : in)
+	{
+		val = (val << 8) + c;
+		valb += 8;
+		while (valb >= 0)
+		{
+			out.push_back(lookup[(val >> valb) & 0x3F]);
+			valb -= 6;
+		}
 	}
-  }
-  if (valb > -6) {
-	out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
-  }
-  while (out.size() % 4) {
-	out.push_back('=');
-  }
-  return out;
+	if (valb > -6)
+	{
+		out.push_back(lookup[((val << 8) >> (valb + 8)) & 0x3F]);
+	}
+	while (out.size() % 4)
+	{
+		out.push_back('=');
+	}
+	return out;
 }
 
 std::string just_domain_from_url(const std::string& url)
 {
 	// use regex to grab between protocol and first slash
-	std::regex domain_regex("^(?:https?:\\/\\/)?(?:[^@\\/\\n]+@)?(?:www\\.)?([^:\\/\\n]+)");
+	std::regex domain_regex(
+		"^(?:https?:\\/\\/)?(?:[^@\\/\\n]+@)?(?:www\\.)?([^:\\/\\n]+)");
 	std::smatch domain_match;
 
 	if (std::regex_search(url, domain_match, domain_regex))
@@ -482,11 +495,14 @@ std::string just_domain_from_url(const std::string& url)
 }
 
 // https://stackoverflow.com/a/56891830/4953343
-std::string myReplace(std::string str, std::string substr1, std::string substr2)
+std::string myReplace(std::string str, std::string substr1,
+	std::string substr2)
 {
-    for (size_t index = str.find(substr1, 0); index != std::string::npos && substr1.length(); index = str.find(substr1, index + substr2.length() ) )
-        str.replace(index, substr1.length(), substr2);
-    return str;
+	for (size_t index = str.find(substr1, 0);
+		index != std::string::npos && substr1.length();
+		index = str.find(substr1, index + substr2.length()))
+		str.replace(index, substr1.length(), substr2);
+	return str;
 }
 
 bool writeFile(const std::string& path, const std::string& content)
@@ -502,10 +518,12 @@ bool writeFile(const std::string& path, const std::string& content)
 	return true;
 }
 
-std::string readFile(const std::string& path) {
+std::string readFile(const std::string& path)
+{
 	// read the file from the path
 	std::ifstream file(path);
-	std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+	std::string content((std::istreambuf_iterator<char>(file)),
+		std::istreambuf_iterator<char>());
 	file.close();
 
 	return content;
@@ -513,8 +531,8 @@ std::string readFile(const std::string& path) {
 
 void parseJSON(const std::string& json, std::map<std::string, void*>& map)
 {
-	// This function is deprecated and should be replaced with direct JSEngine usage
-	// For now, we'll provide a simple passthrough to maintain compatibility
 	// TODO: Remove this function and update callers to use JSEngine directly
-	std::cerr << "Warning: parseJSON(map<string, void*>) is deprecated. Use JSEngine directly." << std::endl;
+	std::cerr << "Warning: parseJSON(map<string, void*>) is deprecated. Use "
+				 "JSEngine directly."
+			  << std::endl;
 }
