@@ -42,7 +42,6 @@ MainDisplay::MainDisplay()
 	mkdir("./data/domains", 0777);
 
 	// parse the favorites from JSON using JSEngine directly
-#ifndef USE_MUJS
 	std::string favoritesContent = readFile("./data/favorites.json");
 	if (!favoritesContent.empty())
 	{
@@ -70,11 +69,6 @@ MainDisplay::MainDisplay()
 	{
 		std::cout << "No favorites.json file found or empty" << std::endl;
 	}
-#else
-	std::cout
-		<< "[MainDisplay] Skipping favorites.json parsing under mujs (stability)"
-		<< std::endl;
-#endif
 }
 
 bool MainDisplay::process(InputEvents* event)

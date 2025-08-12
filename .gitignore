@@ -17,3 +17,6 @@ data/*
 *.wuhb
 *.nso
 build_*
+
+# snabbdom build (see README.md)
+resin/res/snabbdom.js

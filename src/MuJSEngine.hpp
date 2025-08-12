@@ -79,7 +79,8 @@ private:
 	js_State* J;
 	std::string lastError;
 	std::vector<JSFunction> functionTable;
-	std::vector<MuJSFunctionData*> functionDataObjects;
+	std::unordered_map<std::string, int> functionNameToIndex;
+	std::vector<void*> functionDataObjects;
 	MuJSContext context;
 
 	// Per-callback transient state

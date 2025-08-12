@@ -25,8 +25,4 @@ jobs:
       run: BUILD_JS_TESTS=1 JS_ENGINE=${{ matrix.engine }} ./libs/chesto/helpers/build_pc.sh broccolini ${{ matrix.os }} ${{ matrix.library }}
     - name: Run tests
       shell: bash
-      run: ./broccolini_${{ matrix.os }}_${{ matrix.library }}
-    - uses: actions/upload-artifact@v4
-      with:
-        name: broccolini_${{ matrix.os }}_${{ matrix.library }}
-        path: ./broccolini-tests_${{ matrix.os }}_${{ matrix.library }}_${{ matrix.engine }}.zip
+      run: ./broccolini.bin

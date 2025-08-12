@@ -37,6 +37,9 @@ public:
 
 	// Initialize Snabbdom in the JavaScript engine
 	bool initializeSnabbdom();
+	
+	// Load the compiled Snabbdom bundle
+	bool loadSnabbdomBundle();
 
 	// Convert litehtml document to virtual DOM
 	std::shared_ptr<VNode> createVNodeFromLiteHTML(litehtml::element* element);
@@ -64,6 +67,11 @@ public:
 		const std::string& parentId = "");
 	void updateElementTextContent(const std::string& elementId,
 		const std::string& newText);
+	void updateElementInnerHTML(const std::string& elementId,
+		const std::string& newHTML);
+	
+	// Virtual DOM specific methods
+	void processBatchUpdates(const std::string& updatesJson);
 
 private:
 	WebView* webView;

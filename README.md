@@ -45,6 +45,23 @@ There are no stable releases available yet, however there are in-development bui
 
 Nightly links: [Console builds](https://nightly.link/vgmoose/broccolini/workflows/main/main) - [PC builds](https://nightly.link/vgmoose/broccolini/workflows/pc-builds/main)
 
+### Building runtime dependencies
+This project uses [snabbdom](https://github.com/snabbdom/snabbdom) as a virutal DOM to apply updates that scripts execute on the page up to the litehtml/Chesto view. Snabbdom itself is Javascript, so it's parsed by the JSEngine (backed by either mujs or quickjs), and needs to be built separately, before it can be loaded at runtime.
+
+To generate the `./resin/res/snappdom.js` file, run:
+```
+cd scripts
+./build-snabbdom.sh
+```
+
+To verify that it's been loaded correctly, after running the app, check for: 
+```
+[VirtualDOM] Loading Snabbdom bundle (45408 chars)
+...
+[JS Console] [VirtualDOM] Available Snabbdom exports: Fragment,array,attachTo,attributesModule,classModule,datasetModule,eventListenersModule,fragment,h,htmlDomApi,init,jsx,primitive,propsModule,styleModule,thunk,toVNode,vnode
+[JS Console] [VirtualDOM] Snabbdom initialized successfully
+```
+
 ### Building for PC
 **As of this time, building must be done on a case-sensitive filesystem.** Requires SDL2 development libraries for your operating system, and a C++ toolchain. (replace `JS_ENGINE` with either `quickjs` or `mujs`)
 

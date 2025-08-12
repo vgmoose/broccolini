@@ -34,10 +34,10 @@ MuJSEngine::MuJSEngine(WebView* webView)
 
 MuJSEngine::~MuJSEngine()
 {
-	// Clean up function data objects
-	for (auto* funcData : functionDataObjects)
+	// Clean up function data objects (these are int* pointers)
+	for (auto* data : functionDataObjects)
 	{
-		delete funcData;
+		delete static_cast<int*>(data);
 	}
 	functionDataObjects.clear();
 
@@ -126,14 +126,18 @@ void MuJSEngine::registerGlobalFunction(const std::string& name, JSFunction func
 
 	int index = (int)functionTable.size();
 	functionTable.push_back(func);
+	
+	// Store the name-to-index mapping  
+	functionNameToIndex[name] = index;
 
 	std::cout << "[MuJSEngine] Registering function '" << name << "' at index "
 			  << index << std::endl;
 
-	js_newcfunction(J, mujsFunctionWrapper, name.c_str(), 0);
-	auto* funcData = new MuJSFunctionData(this, index);
-	functionDataObjects.push_back(funcData);
-	js_setcontext(J, funcData);
+	// Create a context data for this specific function with the index
+	int* indexData = new int(index);
+	functionDataObjects.push_back(reinterpret_cast<void*>(indexData));
+
+	js_newcfunctionx(J, mujsFunctionWrapper, name.c_str(), 0, indexData, nullptr);
 	js_setglobal(J, name.c_str());
 }
 
@@ -300,35 +304,49 @@ void MuJSEngine::setupBasicBindings()
 // Static methods
 void MuJSEngine::mujsFunctionWrapper(js_State* J)
 {
-	auto* funcData = static_cast<MuJSFunctionData*>(js_getcontext(J));
-	if (!funcData || !funcData->engine)
-		return;
-
-	MuJSEngine* engine = funcData->engine;
+	// Get the extra data that was passed to js_newcfunctionx
+	void* data = js_currentfunctiondata(J);
 	
-	if (funcData->index < 0 || funcData->index >= (int)engine->functionTable.size())
-	{
-		std::cerr << "[MuJSEngine] Invalid function index: " << funcData->index << std::endl;
+	if (!data) {
+		std::cerr << "[MuJSEngine] mujsFunctionWrapper: No data found" << std::endl;
+		js_pushundefined(J);
+		return;
+	}
+	
+	int index = *static_cast<int*>(data);
+	std::cout << "[MuJSEngine] mujsFunctionWrapper called for index: " << index << std::endl;
+	
+	// Get the engine instance from the context
+	MuJSEngine* engine = static_cast<MuJSEngine*>(js_getcontext(J));
+	if (!engine) {
+		std::cerr << "[MuJSEngine] Could not get engine from context" << std::endl;
+		js_pushundefined(J);
+		return;
+	}
+	
+	if (index < 0 || index >= (int)engine->functionTable.size()) {
+		std::cerr << "[MuJSEngine] Invalid function index: " << index << std::endl;
+		js_pushundefined(J);
 		return;
 	}
 
 	// Set up callback context
 	engine->inCallback = true;
-	engine->currentArgc = js_gettop(J) - 1; // subtract 1 for 'this'
+	engine->currentArgc = js_gettop(J);
 	engine->callbackBaseTop = js_gettop(J);
-	engine->thisIndex = 0; // 'this' is at index 0
+	engine->thisIndex = 0;
 	engine->hasReturnValue = false;
 
 	// Call the function
-	JSFunction func = engine->functionTable[funcData->index];
+	JSFunction func = engine->functionTable[index];
+	std::cout << "[MuJSEngine] Calling function at index " << index << std::endl;
 	func();
 
 	// If no return value was set, return undefined
-	if (!engine->hasReturnValue)
-	{
+	if (!engine->hasReturnValue) {
 		js_pushundefined(J);
 	}
-
+	
 	engine->inCallback = false;
 }
 
