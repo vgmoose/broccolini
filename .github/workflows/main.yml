@@ -21,6 +21,9 @@ jobs:
     container:
       image: ghcr.io/fortheusers/sealeo:latest
     steps:
+    - uses: actions/checkout@main
+      with:
+        submodules: recursive
     - name: Use Node.js
       uses: actions/setup-node@v4
       with:
@@ -28,9 +31,6 @@ jobs:
     - name: Build Snabbdom (goes into app bundles)
       shell: bash
       run: cd scripts && ./build-snabbdom.sh
-    - uses: actions/checkout@main
-      with:
-        submodules: recursive
     - name: Build ${{ matrix.platform }}
       run: make ${{ matrix.platform }}
     - uses: actions/upload-artifact@v4
