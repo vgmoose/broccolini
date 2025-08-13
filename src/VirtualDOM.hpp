@@ -59,6 +59,7 @@ public:
 
 	// DOM manipulation methods that work with litehtml
 	litehtml::element::ptr findElementByIdInLiteHTML(const std::string& id);
+	bool updateElementTextDirectly(litehtml::element::ptr element, const std::string& newText);
 	void appendElementToLiteHTML(litehtml::element::ptr parent,
 		litehtml::element::ptr child);
 	void triggerLiteHTMLRerender();
@@ -72,6 +73,18 @@ public:
 	
 	// Virtual DOM specific methods
 	void processBatchUpdates(const std::string& updatesJson);
+	
+	// Snabbdom litehtml bridge methods
+	void createElementInLiteHTML(const std::string& elementDataJson);
+	void updateElementInLiteHTML(const std::string& elementDataJson);
+	void insertElementInLiteHTML(const std::string& elementKey);
+	void removeElementFromLiteHTML(const std::string& elementKey);
+	void destroyElementInLiteHTML(const std::string& elementKey);
+	void handleElementEvent(const std::string& elementKey, const std::string& eventType, const std::string& eventDataJson);
+	
+	// State preservation for document recreation
+	void recreateDocumentWithStatePreservation();
+	void recreateLiteHTMLDocumentOnly();
 
 private:
 	WebView* webView;

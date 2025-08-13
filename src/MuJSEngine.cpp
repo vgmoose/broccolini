@@ -115,6 +115,8 @@ bool MuJSEngine::executeScript(const std::string& script)
 		return false;
 	}
 
+	// Pop the result from successful execution to maintain stack balance
+	js_pop(J, 1);
 	std::cout << "[MuJSEngine] Script executed successfully" << std::endl;
 	return true;
 }
@@ -380,12 +382,7 @@ MuJSEngine* MuJSEngine::getEngineFromState(js_State* J)
 	if (!context)
 		return nullptr;
 	
-	// Check if this is a function data context
-	auto* funcData = static_cast<MuJSFunctionData*>(context);
-	if (funcData && funcData->engine)
-		return funcData->engine;
-	
-	// Otherwise assume it's the engine directly
+	// The context is set to the engine directly in the constructor
 	return static_cast<MuJSEngine*>(context);
 }
 

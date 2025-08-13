@@ -1140,8 +1140,8 @@ void BrocContainer::createChestoLinksFromHTML()
 		return; // Skip if already created, no document, or navigation in progress
 	}
 
-	std::cout << "Creating Chesto links from HTML anchor elements..."
-			  << std::endl;
+	// std::cout << "Creating Chesto links from HTML anchor elements..."
+			//   << std::endl;
 
 	// Find all link elements in the document
 	auto root = webView->m_doc->root();
@@ -1154,8 +1154,8 @@ void BrocContainer::createChestoLinksFromHTML()
 	// Use litehtml's select_all method to find all anchor elements with href
 	litehtml::elements_list link_elements = root->select_all("a[href]");
 
-	std::cout << "Found " << link_elements.size() << " link elements"
-			  << std::endl;
+	// std::cout << "Found " << link_elements.size() << " link elements"
+			//   << std::endl;
 
 	bool createdAnyLinks = false;
 	for (auto& html_link : link_elements)

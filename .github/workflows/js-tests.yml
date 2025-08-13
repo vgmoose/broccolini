@@ -1,4 +1,4 @@
-name: Build PC tests for each JS backend
+name: JS tests for each backend
 
 on:
   push:

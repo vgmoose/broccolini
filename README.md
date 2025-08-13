@@ -9,7 +9,7 @@ Broccolini uses [litehtml](https://github.com/litehtml/litehtml) as its renderin
 
 Video demo on YT: https://www.youtube.com/watch?v=I9lm6_RgElE
 
-"Better than nothing" is the guiding philosophy of this project. It also has very limited JS support through either [quickjs](https://github.com/quickjs-ng/quickjs) or [mujs](https://github.com/ccxvii/mujs) backends (see build instructions for details).
+"Better than nothing" is the guiding philosophy of this project! It also has very limited JS support through either [quickjs](https://github.com/quickjs-ng/quickjs) or [mujs](https://github.com/ccxvii/mujs) backends (see build instructions for details).
 
 ### What Works
 - renders HTML and CSS!
