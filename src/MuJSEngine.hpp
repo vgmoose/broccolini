@@ -42,6 +42,10 @@ public:
 
 	// Core execution
 	bool executeScript(const std::string& script) override;
+	
+	// Execution control - interruption support
+	void enableInterruptHandler() override;
+	void disableInterruptHandler() override;
 
 	// High-level function registration
 	void registerGlobalFunction(const std::string& name, JSFunction func) override;
@@ -69,6 +73,7 @@ public:
 	// Utility
 	std::string getLastError() const override;
 	WebView* getWebView() override { return webView; }
+	void throwError(const std::string& message) override;
 
 	// MuJS specific methods
 	js_State* getState() { return J; }
@@ -101,6 +106,9 @@ private:
 
 	// Helper to get engine instance from js_State
 	static MuJSEngine* getEngineFromState(js_State* J);
+	
+	// Interrupt check function for MuJS
+	static void mujs_check_interrupt(js_State* J);
 };
 
 #endif // MUJS_ENGINE_HPP

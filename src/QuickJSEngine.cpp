@@ -72,6 +72,9 @@ bool QuickJSEngine::executeScript(const std::string& script)
 
 	std::cout << "[QuickJSEngine] Executing script (length: " << script.length() << ")" << std::endl;
 
+	// Start execution timer for timeout detection
+	startExecutionTimer();
+
 	JSValue result = JS_Eval(ctx, script.c_str(), script.length(), "[script]", JS_EVAL_TYPE_GLOBAL);
 
 	if (JS_IsException(result))
@@ -89,6 +92,43 @@ bool QuickJSEngine::executeScript(const std::string& script)
 	JS_FreeValue(ctx, result);
 	std::cout << "[QuickJSEngine] Script executed successfully" << std::endl;
 	return true;
+}
+
+void QuickJSEngine::enableInterruptHandler()
+{
+	if (rt) {
+		std::cout << "[QuickJSEngine] Enabling interrupt handler for execution control" << std::endl;
+		JS_SetInterruptHandler(rt, interruptHandler, this);
+	}
+}
+
+void QuickJSEngine::disableInterruptHandler()
+{
+	if (rt) {
+		std::cout << "[QuickJSEngine] Disabling interrupt handler" << std::endl;
+		JS_SetInterruptHandler(rt, nullptr, nullptr);
+	}
+}
+
+int QuickJSEngine::interruptHandler(JSRuntime* rt, void* opaque)
+{
+	QuickJSEngine* engine = static_cast<QuickJSEngine*>(opaque);
+	if (engine) {
+		// Check for explicit interruption (e.g., from AlertManager)
+		if (engine->isExecutionInterrupted()) {
+			std::cout << "[QuickJSEngine] Interrupt handler triggered - stopping execution due to explicit interrupt" << std::endl;
+			return 1; // Return 1 to interrupt execution
+		}
+		
+		// Check for time-based interruption (prevent infinite loops)
+		if (engine->shouldInterruptForTime(100.0)) { // 100ms max execution time
+			std::cout << "[QuickJSEngine] Interrupt handler triggered - stopping execution due to timeout (" 
+					  << engine->getExecutionTimeMs() << "ms)" << std::endl;
+			engine->setExecutionInterrupted(true); // Mark as interrupted for future checks
+			return 1; // Return 1 to interrupt execution
+		}
+	}
+	return 0; // Return 0 to continue execution
 }
 
 void QuickJSEngine::registerGlobalFunction(const std::string& name, JSFunction func)
@@ -257,6 +297,14 @@ bool QuickJSEngine::parseJSON(const std::string& jsonStr)
 std::string QuickJSEngine::getLastError() const 
 { 
 	return lastError; 
+}
+
+void QuickJSEngine::throwError(const std::string& message)
+{
+	if (ctx) {
+		// Throw an error in the current JavaScript execution context
+		JS_ThrowInternalError(ctx, "%s", message.c_str());
+	}
 }
 
 // QuickJS specific methods

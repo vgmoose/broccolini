@@ -6,6 +6,7 @@
 #include <map>
 #include <vector>
 #include <memory>
+#include <chrono>
 
 class WebView;
 
@@ -29,11 +30,27 @@ public:
 	static std::unique_ptr<JSEngine> create(WebView* webView);
 	
 	virtual ~JSEngine() = default;
-
-	// Core JavaScript execution
+	
+	// Core execution
 	virtual bool executeScript(const std::string& script) = 0;
-
-	// Simple function registration for C++ callbacks
+	
+	// Execution control - interruption support
+	virtual void setExecutionInterrupted(bool interrupted) { executionInterrupted = interrupted; }
+	virtual bool isExecutionInterrupted() const { return executionInterrupted; }
+	virtual void enableInterruptHandler() {} // Override in engines that support it
+	virtual void disableInterruptHandler() {} // Override in engines that support it
+	
+	// Execution time management
+	virtual void startExecutionTimer() { executionStartTime = std::chrono::steady_clock::now(); }
+	virtual void resetExecutionTimer() { executionStartTime = std::chrono::steady_clock::now(); }
+	virtual double getExecutionTimeMs() const {
+		auto now = std::chrono::steady_clock::now();
+		auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - executionStartTime);
+		return duration.count();
+	}
+	virtual bool shouldInterruptForTime(double maxMs = 100.0) const {
+		return getExecutionTimeMs() > maxMs;
+	}	// Simple function registration for C++ callbacks
 	virtual void registerGlobalFunction(const std::string& name, JSFunction func) = 0;
 
 	// High-level value access (no stack manipulation needed)
@@ -59,9 +76,12 @@ public:
 	// Error handling and context
 	virtual std::string getLastError() const = 0;
 	virtual WebView* getWebView() = 0;
+	virtual void throwError(const std::string& message) = 0; // Throw error from C++ to stop JS execution
 
 protected:
 	JSEngine() = default;
+	bool executionInterrupted = false; // Flag for execution interruption
+	std::chrono::steady_clock::time_point executionStartTime = std::chrono::steady_clock::now();
 };
 
 #endif // JSENGINE_HPP

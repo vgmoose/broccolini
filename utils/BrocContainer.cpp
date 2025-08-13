@@ -4,6 +4,9 @@
 #include "../libs/litehtml/include/litehtml/render_item.h"
 #include "../src/Base64Image.hpp"
 #include "../src/JSEngine.hpp"
+#ifdef USE_MUJS
+#include "../src/MuJSEngine.hpp"
+#endif
 #include "../src/MainDisplay.hpp"
 #include "../src/URLBar.hpp"
 #include "Utils.hpp"
@@ -729,8 +732,64 @@ void BrocContainer::executeJavaScriptOnClick(
 		std::cout << "[BrocContainer] Executing onclick JavaScript: " << onclick
 				  << std::endl;
 
-		// Execute the JavaScript code
-		bool success = webView->jsEngine->executeScript(onclick);
+		// Ensure interrupt handler is enabled before executing script
+		if (webView->jsEngine) {
+			webView->jsEngine->enableInterruptHandler();
+		}
+
+		// For MuJS, wrap onclick code with interrupt checks to handle infinite loops
+		std::string wrappedCode = onclick;
+		
+#ifdef USE_MUJS
+		// Check if this is a MuJS engine by trying to get the underlying state
+		// This is a bit of a hack, but it works for our purposes
+		auto* muJSEngine = dynamic_cast<MuJSEngine*>(webView->jsEngine.get());
+		if (muJSEngine) {
+			std::cout << "[BrocContainer] Detected MuJS engine - wrapping code with interrupt protection" << std::endl;
+			
+			// Wrap the onclick code with a timeout mechanism
+			wrappedCode = R"(
+				(function() {
+					var __startTime = Date.now();
+					var __checkCount = 0;
+					var __originalCode = function() {
+						)" + std::string(onclick) + R"(
+					};
+					
+					// Override common loop operations to include timeout checks
+					var __timeoutCheck = function() {
+						if (++__checkCount % 100 === 0) { // Check every 100 iterations
+							if (Date.now() - __startTime > 100) { // 100ms timeout
+								throw new Error('Script execution timeout - infinite loop detected');
+							}
+							if (typeof __checkInterrupt === 'function') __checkInterrupt();
+						}
+					};
+					
+					// Store original functions that might be used in loops
+					var __origSetTimeout = setTimeout;
+					var __origAlert = alert;
+					
+					// Override alert to include timeout check
+					alert = function(msg) {
+						__timeoutCheck();
+						return __origAlert.call(this, msg);
+					};
+					
+					try {
+						__originalCode();
+					} finally {
+						// Restore original functions
+						setTimeout = __origSetTimeout;
+						alert = __origAlert;
+					}
+				})();
+			)";
+		}
+#endif
+
+		// Execute the JavaScript code (wrapped for MuJS, original for QuickJS)
+		bool success = webView->jsEngine->executeScript(wrappedCode);
 		if (!success)
 		{
 			std::cout << "[BrocContainer] Failed to execute onclick JavaScript: "

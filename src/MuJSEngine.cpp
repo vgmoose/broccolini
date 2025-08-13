@@ -61,6 +61,9 @@ bool MuJSEngine::executeScript(const std::string& script)
 	std::cout << "[MuJSEngine] Executing script (length: " << script.length()
 			  << ")" << std::endl;
 
+	// Start execution timer for timeout detection
+	startExecutionTimer();
+
 	if (js_ploadstring(J, "[script]", script.c_str()))
 	{
 		lastError = std::string("Script loading error: ") + js_trystring(J, -1, "Error");
@@ -119,6 +122,82 @@ bool MuJSEngine::executeScript(const std::string& script)
 	js_pop(J, 1);
 	std::cout << "[MuJSEngine] Script executed successfully" << std::endl;
 	return true;
+}
+
+void MuJSEngine::enableInterruptHandler()
+{
+	// injects an interrupt check function into the global scope
+	std::cout << "[MuJSEngine] Enabling interrupt simulation (MuJS doesn't have native interrupt support)" << std::endl;
+	
+	if (J) {
+		// Register a global function that can be called by modified alert() to check for interruption
+		js_newcfunction(J, mujs_check_interrupt, "__checkInterrupt", 0);
+		js_setglobal(J, "__checkInterrupt");
+		
+		// Also inject interrupt checks into common operations to catch infinite loops
+		// Override setTimeout to include interrupt checks
+		const char* timeoutOverride = R"(
+			(function() {
+				var originalSetTimeout = this.setTimeout || function() {};
+				this.setTimeout = function(callback, delay) {
+					if (typeof __checkInterrupt === 'function') __checkInterrupt();
+					return originalSetTimeout.call(this, function() {
+						if (typeof __checkInterrupt === 'function') __checkInterrupt();
+						return callback.apply(this, arguments);
+					}, delay);
+				};
+			})();
+		)";
+		
+		// Execute the override
+		if (js_ploadstring(J, "[interrupt-setup]", timeoutOverride) == 0) {
+			// Push undefined as 'this' before pcall (same as executeScript)
+			js_pushundefined(J);
+			if (js_pcall(J, 0) == 0) {
+				js_pop(J, 1); // Pop successful result
+				std::cout << "[MuJSEngine] Successfully installed setTimeout interrupt override" << std::endl;
+			} else {
+				std::string error = js_trystring(J, -1, "Unknown error");
+				std::cout << "[MuJSEngine] Failed to execute setTimeout override: " << error << std::endl;
+				js_pop(J, 1); // Pop error
+			}
+		} else {
+			std::string error = js_trystring(J, -1, "Unknown error");
+			std::cout << "[MuJSEngine] Failed to load setTimeout override script: " << error << std::endl;
+			js_pop(J, 1); // Pop error
+		}
+	}
+}
+
+void MuJSEngine::disableInterruptHandler()
+{
+	std::cout << "[MuJSEngine] Disabling interrupt simulation" << std::endl;
+	// For MuJS, we can't really disable the interrupt check, but we reset the flag
+	executionInterrupted = false;
+}
+
+void MuJSEngine::mujs_check_interrupt(js_State *J)
+{
+	// Get the engine instance
+	MuJSEngine* engine = static_cast<MuJSEngine*>(js_getcontext(J));
+	
+	if (engine) {
+		// Check for explicit interruption
+		if (engine->isExecutionInterrupted()) {
+			// Throw an error to stop execution
+			js_error(J, "Execution interrupted due to infinite loop detection");
+		}
+		
+		// Check for time-based interruption (prevent infinite loops)
+		if (engine->shouldInterruptForTime(100.0)) { // 100ms max execution time
+			std::cout << "[MuJSEngine] Interrupt check triggered - stopping execution due to timeout (" 
+					  << engine->getExecutionTimeMs() << "ms)" << std::endl;
+			engine->setExecutionInterrupted(true); // Mark as interrupted
+			js_error(J, "Execution interrupted due to script timeout");
+		}
+	}
+	
+	js_pushundefined(J);
 }
 
 void MuJSEngine::registerGlobalFunction(const std::string& name, JSFunction func)
@@ -288,6 +367,14 @@ bool MuJSEngine::parseJSON(const std::string& jsonStr)
 std::string MuJSEngine::getLastError() const 
 { 
 	return lastError; 
+}
+
+void MuJSEngine::throwError(const std::string& message)
+{
+	if (J) {
+		// Throw an error in the current JavaScript execution context
+		js_error(J, message.c_str());
+	}
 }
 
 // MuJS specific methods

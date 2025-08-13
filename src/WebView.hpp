@@ -7,6 +7,8 @@
 #include <map>
 #include <string>
 #include <memory>
+#include "../libs/chesto/src/AlertDialog.hpp"
+#include "AlertManager.hpp"
 
 #define START_PAGE "special://home"
 #define SEARCH_URL "https://html.duckduckgo.com/html?q="
@@ -91,5 +93,14 @@ public:
 	void updateStorageDomain(); // Update cookie and localStorage domain from
 								// current URL
 	void reloadPage();
+
+	AlertDialog* alert = new AlertDialog("", "");
+	std::unique_ptr<AlertManager> alertManager;
+	
+	// Tab visibility and execution control
+	bool isTabVisible = true;
+	bool pauseExecutionWhenHidden = true;
+	void setTabVisible(bool visible);
+	bool shouldAllowScriptExecution() const;
 };
 #endif // WEBVIEW_H

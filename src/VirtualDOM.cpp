@@ -1,5 +1,6 @@
 #include "VirtualDOM.hpp"
 #include "../utils/BrocContainer.hpp"
+#include "../utils/Utils.hpp"
 #include "JSEngine.hpp"
 #include "StorageManager.hpp"
 #include "WebView.hpp"
@@ -13,9 +14,85 @@ VirtualDOM::VirtualDOM(WebView* webView)
 	, engine(nullptr)
 {
 	rootNode = std::make_shared<VNode>("html");
+	
+	// Load JavaScript files into memory once at initialization
+	if (!loadJavaScriptFiles()) {
+		std::cerr << "[VirtualDOM] VirtualDOM functionality will be disabled due to missing JavaScript files" << std::endl;
+	} else {
+		std::cout << "[VirtualDOM] All JavaScript files loaded successfully - VirtualDOM ready" << std::endl;
+	}
 }
 
 VirtualDOM::~VirtualDOM() { }
+
+bool VirtualDOM::loadJavaScriptFiles()
+{
+	std::cout << "[VirtualDOM] Loading JavaScript files from disk..." << std::endl;
+	
+	bool success = true;
+	
+	// Load AMD setup script
+	try {
+		amdSetupScript = readFile(RAMFS "/res/js/amd-setup.js");
+		if (amdSetupScript.empty()) {
+			std::cerr << "[VirtualDOM] Failed to load amd-setup.js - file empty or not found" << std::endl;
+			success = false;
+		} else {
+			std::cout << "[VirtualDOM] Loaded amd-setup.js (" << amdSetupScript.length() << " chars)" << std::endl;
+		}
+	} catch (const std::exception& e) {
+		std::cerr << "[VirtualDOM] Error loading amd-setup.js: " << e.what() << std::endl;
+		success = false;
+	}
+	
+	// Load Snabbdom initialization script
+	try {
+		snabbdomInitScript = readFile(RAMFS "/res/js/snabbdom-init.js");
+		if (snabbdomInitScript.empty()) {
+			std::cerr << "[VirtualDOM] Failed to load snabbdom-init.js - file empty or not found" << std::endl;
+			success = false;
+		} else {
+			std::cout << "[VirtualDOM] Loaded snabbdom-init.js (" << snabbdomInitScript.length() << " chars)" << std::endl;
+		}
+	} catch (const std::exception& e) {
+		std::cerr << "[VirtualDOM] Error loading snabbdom-init.js: " << e.what() << std::endl;
+		success = false;
+	}
+	
+	// Load DOM creation script
+	try {
+		domCreationScript = readFile(RAMFS "/res/js/dom-creation.js");
+		if (domCreationScript.empty()) {
+			std::cerr << "[VirtualDOM] Failed to load dom-creation.js - file empty or not found" << std::endl;
+			success = false;
+		} else {
+			std::cout << "[VirtualDOM] Loaded dom-creation.js (" << domCreationScript.length() << " chars)" << std::endl;
+		}
+	} catch (const std::exception& e) {
+		std::cerr << "[VirtualDOM] Error loading dom-creation.js: " << e.what() << std::endl;
+		success = false;
+	}
+	
+	// Load window bootstrap script
+	try {
+		windowBootstrapScript = readFile(RAMFS "/res/js/window-bootstrap.js");
+		if (windowBootstrapScript.empty()) {
+			std::cerr << "[VirtualDOM] Failed to load window-bootstrap.js - file empty or not found" << std::endl;
+			success = false;
+		} else {
+			std::cout << "[VirtualDOM] Loaded window-bootstrap.js (" << windowBootstrapScript.length() << " chars)" << std::endl;
+		}
+	} catch (const std::exception& e) {
+		std::cerr << "[VirtualDOM] Error loading window-bootstrap.js: " << e.what() << std::endl;
+		success = false;
+	}
+	
+	if (!success) {
+		std::cerr << "[VirtualDOM] Failed to load required JavaScript files - VirtualDOM will be disabled" << std::endl;
+	}
+	
+	return success;
+}
 
 bool VirtualDOM::initializeSnabbdom()
 {
@@ -44,6 +121,12 @@ bool VirtualDOM::initializeSnabbdom()
 
 bool VirtualDOM::loadSnabbdomBundle()
 {
+	// Check if scripts were loaded successfully
+	if (amdSetupScript.empty() || snabbdomInitScript.empty()) {
+		std::cerr << "[VirtualDOM] JavaScript files not loaded, cannot initialize Snabbdom" << std::endl;
+		return false;
+	}
+	
 	// Load the compiled Snabbdom bundle from resources
 	std::string snabbdomPath = RAMFS "/res/snabbdom.js";
 	
@@ -65,78 +148,8 @@ bool VirtualDOM::loadSnabbdomBundle()
 	
 	std::cout << "[VirtualDOM] Loading Snabbdom bundle (" << snabbdomCode.length() << " chars)" << std::endl;
 	
-	// First set up AMD module system for the bundle
-	std::string amdSetup = R"(
-		// Add missing browser APIs for MuJS compatibility
-		if (typeof setTimeout === 'undefined') {
-			window.setTimeout = function(callback, delay) {
-				// Immediate execution for MuJS compatibility
-				if (typeof callback === 'function') {
-					callback();
-				}
-				return 1; // Return a dummy timer ID
-			};
-		}
-		
-		if (typeof clearTimeout === 'undefined') {
-			window.clearTimeout = function(id) {
-				// No-op for MuJS compatibility
-			};
-		}
-		
-		// Simple AMD loader for Snabbdom
-		if (typeof define === 'undefined') {
-			var modules = {};
-			var exports = {};
-			
-			var define = function(deps, factory) {
-				// Handle rollup-style AMD define
-				if (typeof deps === 'function') {
-					// Anonymous define with just factory
-					factory = deps;
-					deps = ['exports'];
-				}
-				
-				var args = [];
-				
-				// Resolve dependencies
-				if (Array.isArray(deps)) {
-					for (var i = 0; i < deps.length; i++) {
-						var dep = deps[i];
-						if (dep === 'require') {
-							args.push(function(name) { return modules[name] ? modules[name].exports : {}; });
-						} else if (dep === 'exports') {
-							args.push(exports);
-						} else if (dep === 'module') {
-							args.push({ exports: exports });
-						} else {
-							args.push(modules[dep] ? modules[dep].exports : {});
-						}
-					}
-				}
-				
-				if (typeof factory === 'function') {
-					var result = factory.apply(null, args);
-					if (result) {
-						exports = result;
-					}
-				}
-				
-				// Store the exports globally for access
-				window.snabbdomExports = exports;
-				modules['snabbdom'] = { exports: exports };
-			};
-			
-			// Make define AMD-compatible
-			define.amd = true;
-			
-			// Make define global
-			this.define = define;
-		}
-	)";
-	
-	// Execute AMD setup first
-	if (!engine->executeScript(amdSetup)) {
+	// Execute AMD setup script (from file)
+	if (!engine->executeScript(amdSetupScript)) {
 		std::cerr << "[VirtualDOM] Failed to set up AMD loader" << std::endl;
 		return false;
 	}
@@ -147,138 +160,8 @@ bool VirtualDOM::loadSnabbdomBundle()
 		return false;
 	}
 	
-	// Initialize Snabbdom with custom litehtml module and common modules
-	std::string snabbdomInit = R"(
-		// Get the Snabbdom exports from the AMD module
-		var snabbdom = window.snabbdomExports || {};
-		
-		console.log('[VirtualDOM] Available Snabbdom exports:', Object.keys(snabbdom));
-		
-		// Create custom litehtml module that bridges to C++
-		var liteHTMLModule = {
-			create: function(emptyVnode, vnode) {
-				console.log('[LiteHTML Module] create:', vnode.sel, 'key:', vnode.key);
-				if (vnode.sel && vnode.sel !== '!' && vnode.sel !== 'text') {
-					var elementData = {
-						tag: vnode.sel,
-						key: vnode.key || '',
-						props: vnode.data ? vnode.data.props || {} : {},
-						attrs: vnode.data ? vnode.data.attrs || {} : {},
-						class: vnode.data ? vnode.data.class || {} : {},
-						style: vnode.data ? vnode.data.style || {} : {},
-						text: vnode.text || ''
-					};
-					__createLiteHTMLElement(JSON.stringify(elementData));
-				}
-			},
-			
-			update: function(oldVnode, vnode) {
-				console.log('[LiteHTML Module] update:', vnode.sel, 'key:', vnode.key);
-				if (vnode.sel && vnode.sel !== '!' && vnode.sel !== 'text') {
-					var elementData = {
-						tag: vnode.sel,
-						key: vnode.key || vnode.sel,
-						props: vnode.data ? vnode.data.props || {} : {},
-						attrs: vnode.data ? vnode.data.attrs || {} : {},
-						class: vnode.data ? vnode.data.class || {} : {},
-						style: vnode.data ? vnode.data.style || {} : {},
-						text: vnode.text || '',
-						oldText: oldVnode.text || ''
-					};
-					__updateLiteHTMLElement(JSON.stringify(elementData));
-				}
-			},
-			
-			insert: function(vnode) {
-				console.log('[LiteHTML Module] insert:', vnode.sel, 'key:', vnode.key);
-				// Element has been inserted into virtual DOM tree - tell litehtml about position
-				if (vnode.sel && vnode.sel !== '!' && vnode.sel !== 'text') {
-					__insertLiteHTMLElement(vnode.key || vnode.sel);
-				}
-			},
-			
-			remove: function(vnode, removeCallback) {
-				console.log('[LiteHTML Module] remove:', vnode.sel, 'key:', vnode.key);
-				if (vnode.sel && vnode.sel !== '!' && vnode.sel !== 'text') {
-					__removeLiteHTMLElement(vnode.key || vnode.sel);
-				}
-				removeCallback(); // Always call the callback to complete removal
-			},
-			
-			destroy: function(vnode) {
-				console.log('[LiteHTML Module] destroy:', vnode.sel, 'key:', vnode.key);
-				if (vnode.sel && vnode.sel !== '!' && vnode.sel !== 'text') {
-					__destroyLiteHTMLElement(vnode.key || vnode.sel);
-				}
-			}
-		};
-		
-		// Initialize patch function with custom litehtml module first, then standard modules
-		if (snabbdom.init && snabbdom.classModule && snabbdom.propsModule && snabbdom.styleModule && snabbdom.eventListenersModule) {
-			window.snabbdomPatch = snabbdom.init([
-				liteHTMLModule,              // Our custom litehtml bridge module FIRST
-				snabbdom.classModule,        // CSS class management
-				snabbdom.propsModule,        // DOM properties
-				snabbdom.styleModule,        // CSS styles
-				snabbdom.eventListenersModule // Event handling
-			]);
-			
-			// Create MuJS-compatible h function wrapper using vnode directly
-			function createMuJSCompatibleH() {
-				return function h(sel, b, c) {
-					// Minimal argument handling to avoid complex logic
-					var data = {};
-					var children = [];
-					var text = undefined;
-					
-					if (arguments.length === 1) {
-						// h('div')
-					} else if (arguments.length === 2) {
-						if (typeof b === 'string') {
-							text = b; // h('div', 'text')
-						} else if (b && b.constructor === Array) {
-							children = b; // h('div', [children])
-						} else if (b) {
-							data = b; // h('div', {props})
-						}
-					} else if (arguments.length === 3) {
-						data = b || {};
-						if (typeof c === 'string') {
-							text = c; // h('div', {props}, 'text')
-						} else if (c) {
-							children = c; // h('div', {props}, [children])
-						}
-					}
-					
-					return snabbdom.vnode(sel, data, children, text, undefined);
-				};
-			}
-			
-			// Use our MuJS-compatible h function instead of the broken one
-			var compatibleH = createMuJSCompatibleH();
-			window.h = compatibleH;
-			window.snabbdom = snabbdom;
-			
-			// IMPORTANT: Also export to global scope for page scripts
-			this.h = compatibleH;
-			this.snabbdomPatch = window.snabbdomPatch;
-			
-			// Initialize virtual DOM state tracking
-			window.currentVTree = null;
-			window.pendingPatches = [];
-			
-			console.log('[VirtualDOM] Snabbdom initialized successfully with litehtml module');
-			console.log('[VirtualDOM] h function available at: window.h and globally as h');
-			console.log('[VirtualDOM] snabbdomPatch available at: window.snabbdomPatch and globally as snabbdomPatch');
-		} else {
-			console.log('[VirtualDOM] Failed to find Snabbdom modules, available keys:', Object.keys(snabbdom));
-			console.log('[VirtualDOM] init available:', !!snabbdom.init);
-			console.log('[VirtualDOM] classModule available:', !!snabbdom.classModule);
-			console.log('[VirtualDOM] propsModule available:', !!snabbdom.propsModule);
-		}
-	)";
-	
-	if (!engine->executeScript(snabbdomInit)) {
+	// Initialize Snabbdom using the loaded script (from file)
+	if (!engine->executeScript(snabbdomInitScript)) {
 		std::cerr << "[VirtualDOM] Failed to initialize Snabbdom" << std::endl;
 		return false;
 	}
@@ -299,26 +182,16 @@ void VirtualDOM::setupDOMBindings()
 	createDOMWithJavaScript();
 	
 	// 3rd, add window/document bootstrapping
-	if (jsEngine)
+	if (jsEngine && !windowBootstrapScript.empty())
 	{
-		jsEngine->executeScript(
-			"(function(){\n"
-			"  if(typeof window==='undefined'){window={};}\n"
-			"  if(typeof document!=='undefined'){ if(typeof "
-			"window.document==='undefined') window.document=document; }\n"
-			"  if(!window.parent) window.parent=window;\n"
-			"  if(!window.top) window.top=window;\n"
-			"  if(!window.self) window.self=window;\n"
-			"  if(typeof window.alert!=='function'){ window.alert=function(msg){ "
-			"console.log('[ALERT]', msg); }; if(typeof alert==='undefined') "
-			"alert=window.alert; }\n"
-			"  if(typeof window.setTimeout!=='function'){ "
-			"window.setTimeout=function(cb,ms){ if(typeof cb==='function'){ cb(); "
-			"} }; if(typeof setTimeout==='undefined') "
-			"setTimeout=window.setTimeout; }\n"
-			"  if(!window.parent) window.parent = window;\n"
-			"  if(!window.parent.location) window.parent.location = window.location;\n"
-			"})();");
+		if (!jsEngine->executeScript(windowBootstrapScript)) {
+			std::cerr << "[VirtualDOM] Failed to execute window bootstrap script" << std::endl;
+		}
+	}
+	else
+	{
+		std::cerr << "[VirtualDOM] Window bootstrap script not available - VirtualDOM disabled" << std::endl;
+		return;
 	}
 
 	
@@ -434,6 +307,24 @@ void VirtualDOM::registerCppCallbacks()
 		if (engine->argCount() >= 1 && engine->argIsString(0)) {
 			std::string message = engine->getArgString(0);
 			std::cout << "[ALERT] " << message << std::endl;
+			
+			// Use AlertManager for rate limiting and proper alert handling
+			if (webView && webView->alertManager) {
+				webView->alertManager->showAlert(message, [](bool dismissed) {
+					// Alert was dismissed - in a more advanced implementation,
+					// this is where you'd resume JavaScript execution
+					std::cout << "[ALERT] Alert dismissed: " << dismissed << std::endl;
+				});
+			}
+			
+			// Check if execution should be interrupted
+			if (engine->isExecutionInterrupted()) {
+				std::cout << "[VirtualDOM] Execution interrupted - stopping script execution" << std::endl;
+				
+				// MuJS: Directly throw an error from C++ to stop JavaScript execution
+				engine->throwError("Execution interrupted due to infinite loop detection");
+				return;
+			}
 		}
 	});
 	
@@ -541,370 +432,15 @@ void VirtualDOM::registerCppCallbacks()
 
 void VirtualDOM::createDOMWithJavaScript()
 {
-	// Create a Snabbdom-based DOM API that routes everything through virtual DOM
-	std::string domScript = R"(
-		console.log("[VDOM] Starting Snabbdom-based DOM creation");
-		
-		// Initialize virtual DOM state
-		var virtualDOMContainer = null;
-		var elementVNodes = {}; // Track vnodes by element ID/key (MuJS compatible object)
-		
-		// MuJS-compatible helper function to convert Map-like object to plain object
-		function mapToObject(mapLikeObj) {
-			var result = {};
-			if (mapLikeObj && mapLikeObj._keys && mapLikeObj._values) {
-				for (var i = 0; i < mapLikeObj._keys.length; i++) {
-					result[mapLikeObj._keys[i]] = mapLikeObj._values[i];
-				}
-			}
-			return result;
-		}
-		
-		// MuJS-compatible Map-like object
-		function createMapLike() {
-			return {
-				_keys: [],
-				_values: [],
-				set: function(key, value) {
-					var index = this._keys.indexOf(key);
-					if (index !== -1) {
-						this._values[index] = value;
-					} else {
-						this._keys.push(key);
-						this._values.push(value);
-					}
-				},
-				get: function(key) {
-					var index = this._keys.indexOf(key);
-					return index !== -1 ? this._values[index] : undefined;
-				},
-				delete: function(key) {
-					var index = this._keys.indexOf(key);
-					if (index !== -1) {
-						this._keys.splice(index, 1);
-						this._values.splice(index, 1);
-						return true;
-					}
-					return false;
-				},
-				get size() {
-					return this._keys.length;
-				}
-			};
-		}
-		
-		// Enhanced createElement that creates virtual nodes
-		function createElement(tagName) {
-			try {
-				// Generate a unique key for this element
-				var elementKey = 'elem_' + Math.random().toString(36).slice(2, 11);
-				
-				// Create the virtual node using window.h for MuJS compatibility
-				var vnode;
-				try {
-					vnode = window.h(tagName.toLowerCase(), { key: elementKey });
-				} catch (e) {
-					console.log('[createElement] Error creating vnode:', e.message);
-					return null;
-				}
-				
-				// Create a proxy object that looks like a DOM element but routes through Snabbdom
-				var element = {
-					tagName: tagName.toUpperCase(),
-					key: elementKey,
-					id: "",
-					_textContent: "",
-					_innerHTML: "",
-					_vnode: vnode,
-					_eventListeners: createMapLike()
-				};
-				
-				// Store in our tracking object
-				elementVNodes[elementKey] = vnode;
-			
-			// textContent property with getter/setter that patches through Snabbdom
-			Object.defineProperty(element, 'textContent', {
-				get: function() {
-					return this._textContent || "";
-				},
-				set: function(value) {
-					console.log('[textContent setter] Setting text:', value, 'on element:', this.key);
-					this._textContent = value;
-					
-					// Create new vnode with updated text and patch it
-					var newVnode = window.h(this.tagName.toLowerCase(), { 
-						key: this.key,
-						props: this._props || {},
-						attrs: this._attrs || {},
-						on: this._eventListeners.size > 0 ? mapToObject(this._eventListeners) : {}
-					}, value);
-					
-					// Update our tracking
-					var oldVnode = elementVNodes[this.key] || this._vnode;
-					elementVNodes[this.key] = newVnode;
-					
-					// Patch through Snabbdom (this will trigger our litehtml module)
-					if (window.snabbdomPatch) {
-						if (window.currentVTree) {
-							window.currentVTree = window.snabbdomPatch(oldVnode, newVnode);
-						} else {
-							// Initialize the virtual tree on first patch
-							window.currentVTree = newVnode;
-							// Still patch to trigger our litehtml module
-							window.currentVTree = window.snabbdomPatch(oldVnode, newVnode);
-						}
-					}
-				},
-				configurable: true,
-				enumerable: true
-			});
-			
-			// innerHTML property with getter/setter that patches through Snabbdom
-			Object.defineProperty(element, 'innerHTML', {
-				get: function() {
-					return this._innerHTML || "";
-				},
-				set: function(value) {
-					console.log('[innerHTML setter] Setting HTML:', value, 'on element:', this.key);
-					console.log('[innerHTML setter] typeof window:', typeof window);
-					console.log('[innerHTML setter] typeof window.__updateElementHTML:', typeof window.__updateElementHTML);
-					this._innerHTML = value;
-					
-					// For innerHTML updates, we bypass Snabbdom and directly call our C++ bridge
-					// because innerHTML contains complex HTML that Snabbdom virtual nodes can't easily represent
-					console.log('[innerHTML setter] Calling __updateElementHTML directly');
-					
-					try {
-						// CRITICAL: For MuJS, we need to call via window. since MuJS doesn't have global function access
-						if (typeof window !== 'undefined' && window.__updateElementHTML) {
-							window.__updateElementHTML(this.key, value);
-						} else {
-							// Fallback for other engines
-							__updateElementHTML(this.key, value);
-						}
-					} catch (e) {
-						console.log('[innerHTML setter] Error calling __updateElementHTML:', e.message);
-						throw e;
-					}
-				},
-				configurable: true,
-				enumerable: true
-			});
-			
-			// addEventListener that goes through Snabbdom's event system
-			element.addEventListener = function(eventType, handler, options) {
-				console.log('[addEventListener] Adding', eventType, 'listener to element:', this.key);
-				
-				// Store the event listener
-				this._eventListeners.set(eventType, handler);
-				
-				// Create new vnode with event listener and patch it
-				var newVnode = window.h(this.tagName.toLowerCase(), { 
-					key: this.key,
-					props: this._props || {},
-					attrs: this._attrs || {},
-					on: mapToObject(this._eventListeners)
-				}, this._textContent || "");
-				
-				// Update our tracking
-				var oldVnode = elementVNodes[this.key] || this._vnode;
-				elementVNodes[this.key] = newVnode;
-				
-				// Patch through Snabbdom (eventListenersModule will handle the actual event binding)
-				if (window.snabbdomPatch && window.currentVTree) {
-					window.currentVTree = window.snabbdomPatch(oldVnode, newVnode);
-				}
-			};
-			
-			// removeEventListener
-			element.removeEventListener = function(eventType, handler) {
-				console.log('[removeEventListener] Removing', eventType, 'listener from element:', this.key);
-				this._eventListeners.delete(eventType);
-				
-				// Re-patch without the event listener
-				var newVnode = window.h(this.tagName.toLowerCase(), { 
-					key: this.key,
-					props: this._props || {},
-					attrs: this._attrs || {},
-					on: mapToObject(this._eventListeners)
-				}, this._textContent || "");
-				
-				var oldVnode = elementVNodes[this.key] || this._vnode;
-				elementVNodes[this.key] = newVnode;
-				
-				if (window.snabbdomPatch && window.currentVTree) {
-					window.currentVTree = window.snabbdomPatch(oldVnode, newVnode);
-				}
-			};
-			
-			return element;
-			} catch (e) {
-				console.log('[createElement] ERROR in createElement:', e.message);
-				console.log('[createElement] Error stack:', e.stack || 'no stack');
-				throw e;
-			}
-		}
-		
-		// Enhanced getElementById that works with our virtual DOM system
-		function getElementById(id) {
-			console.log('[getElementById] Looking for element with id:', id);
-			
-			// First check if we have this element in our virtual DOM (MuJS compatible iteration)
-			for (var key in elementVNodes) {
-				if (elementVNodes.hasOwnProperty(key)) {
-					var vnode = elementVNodes[key];
-					if (vnode.data && vnode.data.attrs && vnode.data.attrs.id === id) {
-						console.log('[getElementById] Found element in virtual DOM:', id);
-						// Return the element wrapper from our tracking
-						return document._elementWrappers[key];
-					}
-				}
-			}
-			
-			// Fall back to checking litehtml
-			var tagName = __getElementById(id);
-			if (tagName) {
-				console.log('[getElementById] Found element in litehtml:', id, 'tag:', tagName);
-				var element = createElement(tagName);
-				
-				// IMPORTANT: Use the actual ID as the key instead of random generated key
-				element.key = id;
-				element.id = id;
-				
-				// Set the id attribute in the vnode using the actual ID as key
-				var newVnode = window.h(tagName.toLowerCase(), { 
-					key: id,  // Use actual ID as key
-					attrs: { id: id }
-				});
-				
-				elementVNodes[id] = newVnode;  // Use ID as object key
-				
-				// Store wrapper for future lookups
-				if (!document._elementWrappers) {
-					document._elementWrappers = {};
-				}
-				document._elementWrappers[id] = element;  // Use ID as object key
-				
-				return element;
-			}
-			
-			console.log('[getElementById] Element not found:', id);
-			return null;
-		}
-		
-		// Create document object with Snabbdom integration
-		var document = {
-			createElement: createElement,
-			getElementById: getElementById,
-			_elementWrappers: {} // Track element wrappers by key (MuJS compatible object)
-		};
-		
-		// Create location object for navigation
-		var location = {
-			reload: function() {
-				__reloadPage();
-			},
-			replace: function(url) {
-				__setHref(url);
-			},
-			assign: function(url) {
-				__setHref(url);
-			}
-		};
-		
-		Object.defineProperty(location, 'href', {
-			get: function() {
-				return __getHref();
-			},
-			set: function(value) {
-				__setHref(value);
-			}
-		});
-		
-		// Create window object with proper parent/location hierarchy for MuJS compatibility
-		var window = {
-			document: document,
-			location: location,
-			alert: function(message) {
-				__alert(message);
-			},
-			// CRITICAL: Add bridge functions to window object for innerHTML setters
-			__updateElementHTML: __updateElementHTML,
-			__getElementById: __getElementById,
-			__updateTextContent: __updateTextContent,
-			__updateLiteHTMLElement: __updateLiteHTMLElement,
-			__createLiteHTMLElement: __createLiteHTMLElement
-		};
-		
-		// CRITICAL: Set up window hierarchy with proper location access for MuJS
-		// MuJS needs explicit object references, can't use forward references
-		window.parent = {
-			location: location,
-			document: document
-		};
-		window.top = window;
-		window.self = window;
-		
-		// IMPORTANT: Make sure parent.location has all required methods
-		if (!window.parent.location.replace) {
-			window.parent.location.replace = function(url) {
-				__setHref(url);
-			};
-		}
-		if (!window.parent.location.assign) {
-			window.parent.location.assign = function(url) {
-				__setHref(url);
-			};
-		}
-		if (!window.parent.location.reload) {
-			window.parent.location.reload = function() {
-				__reloadPage();
-			};
-		}
-		
-		// Expose globally - CRITICAL: MuJS requires explicit global binding
-		if (typeof globalThis !== 'undefined') {
-			globalThis.window = window;
-			globalThis.document = document;
-		}
-		
-		// IMPORTANT: For MuJS compatibility, bind directly to global scope
-		// MuJS doesn't have globalThis, so we need to use 'this' in global context
-		try {
-			// In MuJS, 'this' at global level refers to the global object
-			if (typeof this === 'object' && this !== null) {
-				this.window = window;
-				this.document = document;
-				this.location = location; // Make location directly accessible too
-				
-				// CRITICAL: Also bind commonly used onclick patterns directly
-				this.alert = window.alert;
-				
-				// CRITICAL: Bind bridge functions that are called from innerHTML setter and other DOM operations
-				this.__updateElementHTML = __updateElementHTML;
-				this.__getElementById = __getElementById;
-				this.__updateTextContent = __updateTextContent;
-				this.__updateLiteHTMLElement = __updateLiteHTMLElement;
-				this.__createLiteHTMLElement = __createLiteHTMLElement;
-				
-				// Verify the bindings work
-				console.log('[VDOM] MuJS global bindings created:');
-				console.log('[VDOM] - this.window:', typeof this.window);
-				console.log('[VDOM] - this.document:', typeof this.document);
-				console.log('[VDOM] - this.window.parent:', typeof this.window.parent);
-				console.log('[VDOM] - this.window.parent.location:', typeof this.window.parent.location);
-				console.log('[VDOM] - this.window.parent.location.replace:', typeof this.window.parent.location.replace);
-			}
-		} catch (e) {
-			// Fallback for engines that don't support 'this' at global level
-			console.log('[VDOM] Could not bind to global this:', e.message);
-		}
-		
-		console.log("[VDOM] Snabbdom-based DOM creation completed");
-	)";
+	// Check if scripts were loaded successfully
+	if (domCreationScript.empty()) {
+		std::cerr << "[VirtualDOM] DOM creation script not available - VirtualDOM disabled" << std::endl;
+		return;
+	}
 	
-	if (!engine->executeScript(domScript)) {
-		std::cout << "[VirtualDOM] Failed to execute Snabbdom-based DOM creation script" << std::endl;
+	// Execute the DOM creation script from file
+	if (!engine->executeScript(domCreationScript)) {
+		std::cerr << "[VirtualDOM] Failed to execute DOM creation script from file" << std::endl;
 	}
 }
 
@@ -915,7 +451,6 @@ void VirtualDOM::updateElementTextContent(const std::string& elementId, const st
 	std::cout << "[VirtualDOM] updateElementTextContent (legacy): " << elementId << " -> " << newText << std::endl;
 	std::cout << "[VirtualDOM] WARNING: Direct updateElementTextContent called - should use Snabbdom instead" << std::endl;
 	
-	// Route through Snabbdom if possible
 	if (engine) {
 		std::string snabbdomUpdate = R"(
 			try {
@@ -936,31 +471,7 @@ void VirtualDOM::updateElementTextContent(const std::string& elementId, const st
 		}
 	}
 	
-	// Fallback to direct litehtml manipulation if Snabbdom routing fails
-	auto element = findElementByIdInLiteHTML(elementId);
-	if (element && webView) {
-		std::string& htmlContent = webView->contents;
-		std::string searchPattern = "id=\"" + elementId + "\"";
-		size_t elementPos = htmlContent.find(searchPattern);
-		
-		if (elementPos != std::string::npos) {
-			size_t tagStart = htmlContent.rfind('<', elementPos);
-			size_t contentStart = htmlContent.find('>', elementPos) + 1;
-			size_t contentEnd = htmlContent.find('<', contentStart);
-			
-			if (tagStart != std::string::npos && contentStart != std::string::npos && contentEnd != std::string::npos) {
-				std::string before = htmlContent.substr(0, contentStart);
-				std::string after = htmlContent.substr(contentEnd);
-				htmlContent = before + newText + after;
-				
-				std::cout << "[VirtualDOM] Updated HTML content via fallback, triggering re-render" << std::endl;
-				webView->recreateDocument();
-				return;
-			}
-		}
-	}
-	
-	std::cout << "[VirtualDOM] Legacy textContent update failed: " << elementId << std::endl;
+	std::cout << "[VirtualDOM] textContent update failed: " << elementId << std::endl;
 }
 
 litehtml::element::ptr VirtualDOM::findElementByIdInLiteHTML(const std::string& id)

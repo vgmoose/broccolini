@@ -87,10 +87,18 @@ public:
 	void recreateLiteHTMLDocumentOnly();
 
 private:
+	// Load JavaScript files into memory (called once at initialization)
+	bool loadJavaScriptFiles();
 	WebView* webView;
 	JSEngine* jsEngine;  // owning elsewhere
 	JSEngine* engine;    // convenience pointer (same as jsEngine)
 	std::shared_ptr<VNode> rootNode;
+
+	// Cached JavaScript content (loaded once at initialization)
+	std::string amdSetupScript;
+	std::string snabbdomInitScript;
+	std::string domCreationScript;
+	std::string windowBootstrapScript;
 
 	// Helper functions for the new simplified approach
 	void registerCppCallbacks();

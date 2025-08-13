@@ -9,12 +9,14 @@
 #include "StorageManager.hpp"
 #include "URLBar.hpp"
 #include "VirtualDOM.hpp"
+#include "AlertManager.hpp"
 
 #include <fstream>
 #include <iostream>
 #include <iterator>
 #include <regex>
 #include <string>
+#include <chrono>
 
 WebView::WebView()
 {
@@ -27,17 +29,32 @@ WebView::WebView()
 	// put a random number into the ID string
 	this->id = std::to_string(rand()) + std::to_string(rand());
 
+	// Initialize AlertManager
+	alertManager = std::make_unique<AlertManager>(this);
+
 	// Initialize JavaScript support
 	initializeJavaScript();
+
+	// hook up the alert dismiss
+	alert->onConfirm = [this]() {
+		alert->hidden = true; // TODO: animate?
+	};
 }
 
-WebView::~WebView() { cleanupJavaScript(); }
+WebView::~WebView() {
+	cleanupJavaScript();
+	// clean up the alert, which never actually got added to the render tree
+	delete alert;
+}
 
 bool WebView::process(InputEvents* e)
 {
-	if (hidden)
-	{
+	if (hidden) {
 		return false;
+	}
+	if (!alert->hidden) {
+		// if the alert is shown, just process its input tree
+		return alert->process(e);
 	}
 	if (needsLoad)
 	{
@@ -102,8 +119,7 @@ bool WebView::process(InputEvents* e)
 
 void WebView::render(Element* parent)
 {
-	if (hidden)
-	{
+	if (hidden) {
 		return;
 	}
 	if (needsRender && this->m_doc != nullptr)
@@ -134,19 +150,9 @@ void WebView::render(Element* parent)
 	// render the child elements (above whatever we just drew)
 	ListElement::render(parent);
 
-	// render the overlay of the next link, if it's set
-	if (nextLinkHref != "")
-	{
-		// iterate through the areas in webView->nextLinkRects
-		auto renderer = RootDisplay::mainDisplay->renderer;
-		for (auto rect : nextLinkRects)
-		{
-			// draw a rectangle over the area
-			CST_roundedBoxRGBA(renderer, rect.x, rect.y, rect.x + rect.w,
-				rect.y + rect.h, 0, 0xad, 0xd8, 0xe6, 0x90);
-			CST_roundedRectangleRGBA(renderer, rect.x, rect.y, rect.x + rect.w,
-				rect.y + rect.h, 0, 0x66, 0x7c, 0x89, 0x90);
-		}
+	if (!alert->hidden) {
+		// alert isn't hidden, render it on top of everything
+		alert->render(this);
 	}
 }
 
@@ -488,6 +494,12 @@ void WebView::initializeJavaScript()
 	try
 	{
 		jsEngine = JSEngine::create(this);
+		
+		// Enable interrupt handler for execution control
+		if (jsEngine) {
+			jsEngine->enableInterruptHandler();
+		}
+		
 		virtualDOM = new VirtualDOM(this);
 		if (virtualDOM->initializeSnabbdom())
 		{
@@ -662,8 +674,11 @@ void WebView::executeScriptsFromDocument()
 
 bool WebView::executeJavaScript(const std::string& script)
 {
-	if (!jsEnabled || !jsEngine)
+	// Check if script execution is allowed (tab visibility, JS enabled, etc.)
+	if (!shouldAllowScriptExecution() || !jsEngine) {
+		std::cout << "[WebView] Script execution not allowed - tab hidden or JS disabled" << std::endl;
 		return false;
+	}
 	std::string preview;
 	preview.reserve(120);
 	for (char c : script)
@@ -805,6 +820,11 @@ void WebView::goTo(const std::string& newUrl)
 	// Mark for loading and reset redirect count
 	needsLoad = true;
 	redirectCount = 0;
+	
+	// Reset alert manager when navigating to new page
+	if (alertManager) {
+		alertManager->reset();
+	}
 
 	std::cout << "Navigation setup complete, will load: " << this->url
 			  << std::endl;
@@ -817,4 +837,42 @@ void WebView::reloadPage()
 	redirectCount = 0;
 
 	this->y = minYScroll; // reset scroll position to top
+}
+
+
+// Tab visibility and execution control methods
+void WebView::setTabVisible(bool visible)
+{
+	if (isTabVisible != visible) {
+		isTabVisible = visible;
+		std::cout << "[WebView] Tab visibility changed to: " << (visible ? "visible" : "hidden") << std::endl;
+		
+		// If tab becomes hidden and we have pause-on-hidden enabled, interrupt current execution
+		if (!visible && pauseExecutionWhenHidden && jsEngine) {
+			std::cout << "[WebView] Pausing script execution due to tab becoming hidden" << std::endl;
+			jsEngine->setExecutionInterrupted(true);
+		}
+		
+		// If tab becomes visible, reset execution state
+		if (visible && jsEngine) {
+			std::cout << "[WebView] Resuming script execution due to tab becoming visible" << std::endl;
+			jsEngine->setExecutionInterrupted(false);
+			jsEngine->resetExecutionTimer();
+		}
+	}
+}
+
+bool WebView::shouldAllowScriptExecution() const
+{
+	// Don't allow script execution if tab is hidden and pause-on-hidden is enabled
+	if (!isTabVisible && pauseExecutionWhenHidden) {
+		return false;
+	}
+	
+	// Don't allow if JavaScript is disabled
+	if (!jsEnabled) {
+		return false;
+	}
+	
+	return true;
 }
